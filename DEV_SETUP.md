@@ -57,7 +57,53 @@ src/doc-gen/
 └── content_briefs/            # Brand content brief templates
     ├── payment_comparisons.md
     └── payment_termonology.md
+
+# Root-level runner files
+run-planning.py                 # Planning-only workflow runner
+run-pipeline.py                 # Full pipeline runner (Planning → Production → Analysis)
+run-production.py               # Production-only runner (rerun production from existing planning)
+job_utils.py                   # Job ID management utilities
+jobid.txt                      # Sequential job ID tracker (0001, 0002, etc.)
+output/                        # Generated job folders (0001/, 0002/, etc.)
 ```
+
+## Usage
+
+### Running the Workflows
+
+```bash
+# Navigate to the project
+cd /Users/erik/RAQ/Raq.Ai
+
+# Activate environment
+./activate_env.sh
+
+# Run different workflows
+python run-planning.py          # Planning only
+python run-pipeline.py          # Full pipeline  
+python run-production.py        # Production-only (rerun from existing planning)
+```
+
+### VS Code Debug Configurations
+
+The project includes three debug configurations in `.vscode/launch.json`:
+
+1. **RAQ.AI Planning Runner** - Debug `run-planning.py`
+2. **RAQ.AI Full Pipeline Runner** - Debug `run-pipeline.py`  
+3. **RAQ.AI Production-Only Runner** - Debug `run-production.py`
+
+### Runner Configuration
+
+Each runner has configuration constants at the top of the file:
+
+```python
+# Edit these constants as needed
+USER_INPUT = "Create a comprehensive guide about..."
+TEMPLATE_URL = None  # Optional
+CONTENT_BRIEF_TYPE = "payment_comparisons"
+
+# For production-only runner:
+TARGET_JOB_ID = 2  # Rerun production using job 0002's planning output
 
 ## Usage
 

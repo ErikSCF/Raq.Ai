@@ -37,8 +37,8 @@ htmlcov/
 .env.*.local
 
 # AutoGen logs and outputs
-job_*/
-output_*/
+jobid.txt
+output/
 logs/
 
 # mypy
