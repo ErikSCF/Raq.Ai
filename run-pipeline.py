@@ -21,13 +21,13 @@ from job_utils import get_next_job_id, peek_current_job_id, get_job_history
 # ==========================================
 
 # Content description/requirements
-USER_INPUT = "Create a comparison article of Payment Orchestration Platforms vs Payment Service Providers"
+USER_INPUT = "Create a RAQ project planning document using the assets provided."
 
 # Template URL for structure analysis (optional)
-TEMPLATE_URL = "https://dev.paytechguide.com/insights/Stripe-vs-Spreedly?page=1"  # Set to None if not needed
+TEMPLATE_URL = None  # Set to None if not needed
 
 # Available options: payment_comparisons, payment_termonology
-CONTENT_BRIEF_TYPE = "payment_comparisons"
+CONTENT_BRIEF_TYPE = "raq_project_planning"
 
 # Output directory for job folders
 OUTPUT_BASE_PATH = Path(__file__).parent / "output"

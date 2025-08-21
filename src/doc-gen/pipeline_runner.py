@@ -10,6 +10,7 @@ Features:
 - Sequential execution: Planning Team -> Production Team -> Process Analysis
 - Output saved to job-specific directories
 - Integrated with DocumentGenerationService
+- Asset management for PDFs, meeting notes, and transcripts
 """
 
 import yaml
@@ -41,6 +42,26 @@ except ImportError:
     sys.path.insert(0, str(Path(__file__).parent))
     from process_analysis_runner import ProcessAnalysisRunner
 
+# Import asset management utilities
+try:
+    import sys
+    sys.path.insert(0, str(Path(__file__).parent.parent.parent))  # Go to root directory
+    from asset_utils import (
+        move_assets_to_job, 
+        clone_assets_from_job, 
+        load_all_job_assets, 
+        format_assets_for_agent,
+        get_assets_summary
+    )
+except ImportError as e:
+    print(f"Warning: Could not import asset utilities: {e}")
+    # Provide fallback functions
+    def move_assets_to_job(job_id): return []
+    def clone_assets_from_job(source_job_id, target_job_id): return []
+    def load_all_job_assets(job_id): return {}
+    def format_assets_for_agent(assets_content): return ""
+    def get_assets_summary(job_id): return "Asset management not available"
+
 class PipelineRunner:
     def __init__(self, base_dir: Path = None, cancellation_flag=None):
         self.base_dir = base_dir or Path(__file__).parent
@@ -48,6 +69,7 @@ class PipelineRunner:
         self.tools_config_path = self.base_dir / "tools_config.yaml"
         self.cancellation_flag = cancellation_flag  # For checking cancellation during execution
         self.brief_content = ""  # Store content brief for appending to final output
+        self.assets_content = {}  # Store loaded assets for the current job
         
         # Team configuration files
         self.planning_yaml = self.base_dir / "Content_Planning_Team.yaml"
@@ -344,6 +366,11 @@ An error occurred while running {team_name}:
         template_url = input_data.get('template_url')
         has_custom_brief = input_data.get('custom_content_brief', False)
         
+        # Load assets for this job if available
+        job_id = input_data.get('job_id', 'unknown')
+        assets_content = load_all_job_assets(job_id)
+        assets_formatted = format_assets_for_agent(assets_content) if assets_content else ""
+        
         # Read the content brief file if available
         self.brief_content = ""
         
@@ -378,11 +405,15 @@ An error occurred while running {team_name}:
                 task_parts.append(f"\nSTART CONTENT BRIEF:\n{self.brief_content}")
                 task_parts.append(f"\nEND CONTENT BRIEF")
             
+            # Add assets if available
+            if assets_formatted:
+                task_parts.append(f"\n{assets_formatted}")
+            
             if template_url:
                 task_parts.append(f"\nSource URL for structure analysis: {template_url}")
             
-            task_parts.append("\nPlease begin the content planning workflow to create article outline, SEO keywords, research data, introduction, and brand-aligned planning artifacts.")
-            task_parts.append("\nIMPORTANT: All agents should reference the brand_content_brief.md file for guidance on brand voice, target audience, content strategy, and any specific requirements or formatting instructions.")
+            task_parts.append("\nPlease begin the content planning workflow to create article outline and introduction using the content brief and any provided assets.")
+            task_parts.append("\nIMPORTANT: All agents should reference the content brief for guidance on brand voice, target audience, content strategy, and any specific requirements. Use the provided assets to inform your planning decisions.")
             
         elif 'Production' in team_name:
             planning_artifacts = input_data.get('planning_artifacts', '')
@@ -395,15 +426,25 @@ An error occurred while running {team_name}:
                 
                 task_parts = [
                     f"Content Brief Type: {content_brief_type if not has_custom_brief else 'Custom'}",
-                    f"\nPLANNING ARTIFACTS:\n{planning_content}",
-                    "\nPlease begin the content production workflow to create the final article based on the planning artifacts above."
+                    f"\nPLANNING ARTIFACTS:\n{planning_content}"
                 ]
+                
+                # Add assets if available
+                if assets_formatted:
+                    task_parts.append(f"\n{assets_formatted}")
+                
+                task_parts.append("\nPlease begin the content production workflow to create the final article based on the planning artifacts above and any provided assets.")
             else:
                 task_parts = [
                     f"Content Brief Type: {content_brief_type if not has_custom_brief else 'Custom'}",
-                    f"Content Description: {user_input}",
-                    "\nPlease begin the content production workflow to create the final article."
+                    f"Content Description: {user_input}"
                 ]
+                
+                # Add assets if available
+                if assets_formatted:
+                    task_parts.append(f"\n{assets_formatted}")
+                
+                task_parts.append("\nPlease begin the content production workflow to create the final article.")
         else:
             # Fallback for other team types
             task_parts = [
@@ -440,6 +481,13 @@ An error occurred while running {team_name}:
         # Create job folder
         job_folder = self.create_job_folder(job_id, output_base_path)
         
+        # Move assets from root assets directory to job folder
+        moved_assets = move_assets_to_job(job_id)
+        if moved_assets:
+            print(f"Moved {len(moved_assets)} assets to job {job_id}: {', '.join(moved_assets)}")
+        else:
+            print(f"No assets found to move for job {job_id}")
+        
         # Copy assets
         planning_yaml_dest, production_yaml_dest = self.copy_assets(
             job_folder, content_brief_type, template_url, user_input, custom_content_brief
@@ -455,7 +503,8 @@ An error occurred while running {team_name}:
                 "content_brief_type": content_brief_type,
                 "template_url": template_url,
                 "user_input": user_input,
-                "custom_content_brief": custom_content_brief is not None
+                "custom_content_brief": custom_content_brief is not None,
+                "job_id": job_id
             },
             job_folder
         )
@@ -478,7 +527,8 @@ An error occurred while running {team_name}:
             {
                 "planning_artifacts": str(planning_output),
                 "content_brief_type": content_brief_type,
-                "custom_content_brief": custom_content_brief is not None
+                "custom_content_brief": custom_content_brief is not None,
+                "job_id": job_id
             },
             job_folder
         )
@@ -533,7 +583,7 @@ An error occurred while running {team_name}:
         using the provided planning_output.md file as input.
         
         Args:
-            job_id: Unique identifier for the job
+            job_id: Unique identifier for the new job
             planning_file_path: Path to the planning_output.md file
             
         Returns:
@@ -545,13 +595,32 @@ An error occurred while running {team_name}:
         
         try:
             # Determine paths
-            job_folder = Path(planning_file_path).parent
+            source_job_folder = Path(planning_file_path).parent
             planning_output = Path(planning_file_path)
+            
+            # Extract source job ID from the path (folder name is already in 0004 format)
+            source_job_id = source_job_folder.name
             
             # Verify planning file exists
             if not planning_output.exists():
                 print(f"Error: Planning file not found: {planning_file_path}")
                 return False
+            
+            # Create new job folder for production-only run
+            from pathlib import Path
+            output_base_path = source_job_folder.parent
+            new_job_folder = self.create_job_folder(job_id, output_base_path)
+            
+            # Clone assets from source job to new job
+            cloned_assets = clone_assets_from_job(source_job_id, job_id)
+            if cloned_assets:
+                print(f"Cloned {len(cloned_assets)} assets from job {source_job_id} to job {job_id}: {', '.join(cloned_assets)}")
+            else:
+                print(f"No assets found to clone from job {source_job_id}")
+            
+            # Copy planning output to new job folder
+            new_planning_path = new_job_folder / "planning_output.md"
+            shutil.copy2(planning_output, new_planning_path)
             
             # Check for cancellation before starting
             if self.cancellation_flag and self.cancellation_flag.is_set():
@@ -559,20 +628,21 @@ An error occurred while running {team_name}:
                 return False
             
             # Copy required assets for production team
-            production_yaml_dest = self._copy_production_assets(job_folder)
+            production_yaml_dest = self._copy_production_assets(new_job_folder)
             
             # Run Production Team only (using provided planning output as input)
-            production_output = job_folder / "production_output.md"
+            production_output = new_job_folder / "production_output.md"
             success = asyncio.run(self.run_autogen_team(
                 production_yaml_dest, 
                 production_output, 
                 "Content Production Team",
                 {
-                    "planning_artifacts": str(planning_output),
+                    "planning_artifacts": str(new_planning_path),
                     "content_brief_type": "custom",
-                    "custom_content_brief": True
+                    "custom_content_brief": True,
+                    "job_id": job_id
                 },
-                job_folder
+                new_job_folder
             ))
             
             if not success:
@@ -586,8 +656,8 @@ An error occurred while running {team_name}:
             
             print(f"\n=== Production-Only Pipeline Complete ===")
             print(f"Job ID: {job_id}")
-            print(f"Job folder: {job_folder}")
-            print(f"Planning input: {planning_output}")
+            print(f"Job folder: {new_job_folder}")
+            print(f"Planning input: {new_planning_path}")
             print(f"Production output: {production_output}")
             print(f"\n✨ Production-only pipeline completed successfully!")
             
@@ -673,6 +743,13 @@ An error occurred while running {team_name}:
         # Create job folder
         job_folder = self.create_job_folder(job_id, output_base_path)
         
+        # Move assets from root assets directory to job folder
+        moved_assets = move_assets_to_job(job_id)
+        if moved_assets:
+            print(f"Moved {len(moved_assets)} assets to job {job_id}: {', '.join(moved_assets)}")
+        else:
+            print(f"No assets found to move for job {job_id}")
+        
         # Copy assets (only planning-related assets)
         self.copy_assets(
             job_folder, content_brief_type, template_url, user_input, custom_content_brief
@@ -688,7 +765,8 @@ An error occurred while running {team_name}:
                 "content_brief_type": content_brief_type,
                 "user_input": user_input,
                 "template_url": template_url,
-                "custom_content_brief": custom_content_brief
+                "custom_content_brief": custom_content_brief,
+                "job_id": job_id
             },
             job_folder
         )

@@ -5,8 +5,7 @@ team:
     {roles}
 
     Role Descriptions:
-     • URL Fetcher Agent: Downloads and analyzes web content from provided URLs to extract structure and formatting insights for the outline agent.
-     • Article Outline Agent: Crafts a detailed structure and outline for the article using URL analysis (if available) and topic understanding.
+     • Article Outline Agent: Crafts a detailed RAQ structure and outline using provided assets and project documents.
      • Article Writer Agent: Generates the introduction section based on the outline.
      • Quality Agent: Reviews all planning components for brand alignment and quality, provides feedback to writer agent if improvements are needed, then compiles final document when approved.
      • Markdown Agent: Formats the final planning artifacts document in clean, well-structured Markdown format.
@@ -18,13 +17,12 @@ team:
      3. Whether the conversation requires quality review or user approval
 
     Ensure the following sequence:
-     1. The url_fetcher_agent downloads URL content if present, otherwise passes directly to outline_agent.
-     2. The outline_agent creates the initial detailed outline using URL analysis (if available) and topic understanding.
-     3. The writer_agent creates the introduction and optimizes the outline. (REQUIRED STEP)
-     4. The quality_agent reviews all components for brand alignment and quality standards.
-     5. If quality_agent finds issues, it provides feedback to writer_agent for refinement (repeat steps 3-4 until approved).
-     6. Once quality_agent approves content quality, it MUST assemble the complete final planning artifacts document with all components and pass control to markdown_agent.
-     7. The markdown_agent formats the final document in clean Markdown format and completes the workflow.
+     1. The outline_agent creates the initial detailed RAQ outline using provided assets and project understanding.
+     2. The writer_agent creates the introduction and optimizes the outline. (REQUIRED STEP)
+     3. The quality_agent reviews all components for brand alignment and quality standards.
+     4. If quality_agent finds issues, it provides feedback to writer_agent for refinement (repeat steps 2-3 until approved).
+     5. Once quality_agent approves content quality, it MUST assemble the complete final planning artifacts document with all components and pass control to markdown_agent.
+     6. The markdown_agent formats the final document in clean Markdown format and completes the workflow.
 
     CRITICAL SELECTOR RULES:
     • NEVER select quality_agent until writer_agent has provided BOTH: 1) Final Outline AND 2) Introduction section
@@ -41,42 +39,31 @@ team:
     Now, select the next role to act from the list of {participants}. Only return the role name. Do not include explanations or additional text.
 
 participants:
-  - name: "url_fetcher_agent"
-    type: "AssistantAgent"
-    description: "Downloads and analyzes web content from provided URLs."
-    tools:
-      - "fetch_webpage"
-    system_message: |
-      You are the URL Fetcher Agent, responsible for downloading and analyzing web content when a URL is provided.
-      • If the user provides a URL, use the fetch_webpage tool to download and analyze the content.
-      • IMPORTANT: When calling fetch_webpage, do not use max_length parameter to ensure full content is retrieved for proper template analysis.
-      • Extract key structural elements, formatting patterns, and content organization from the webpage.
-      • Focus on article structure, heading hierarchy, section organization, and content flow patterns.
-      • Provide a comprehensive summary of the webpage structure and key insights that will help the outline_agent create a similar structure.
-      • After analysis, pass all insights to the outline_agent to create the article structure.
-      • If no URL is provided, directly pass control to the outline_agent.
-
   - name: "outline_agent"
     type: "AssistantAgent"
-    description: "Crafts detailed article structure and outline."
+    description: "Crafts detailed RAQ structure and outline using provided assets."
     tools: []
     system_message: |
-      You are the Article Outline Agent, responsible for generating a detailed structure and outline with instructional hints ONLY.
+      You are the Article Outline Agent, responsible for generating a detailed RAQ structure and outline with instructional hints ONLY.
       
-      • If URL analysis was provided by the url_fetcher_agent, use those structural insights to guide your outline format, exclude any call to action sections.
+      • CRITICAL: You MUST thoroughly analyze and incorporate ALL provided assets (PDFs, documents, meeting notes, etc.) into your RAQ outline.
+      • Review any project documents, functional specifications, or requirements provided as assets to understand the specific project context.
+      • Use asset content to inform the Epic-Based Requirements Matrix with project-specific epics and questions.
       • You MUST carefully read and apply ALL guidance, requirements, and outline instructions found in the content brief. This includes:
         - Any required headings, sections, or structure
         - Specific instructions, formatting, or style notes
         - Mandatory elements, topics, or coverage areas
         - Any outline requirements, constraints, or examples
       • If the content brief provides an outline template, headings, or required structure, you MUST use and adapt it directly in your output.
+      • When provided assets contain specific project information, tailor the RAQ outline to reflect that project's actual requirements and scope.
+      • For each Epic in the Requirements Matrix, derive questions and considerations from the actual project details found in the assets.
       • If the content brief provides guidance or requirements for instructional hints, you MUST incorporate them under the appropriate headings.
       • Create ONLY the heading structure using markdown format (#, ##, ###)
       • Under each heading, provide ONLY italic instructional hints (*text*) that tell writers what to cover, using and adapting any guidance from the content brief.
+      • When provided with project assets, reference specific project details in your instructional hints.
       • Do NOT write any actual content, descriptions, or full sentences outside of italic hints.
       • Do NOT create tables, lists, or detailed explanations
-      • Focus on what information should be covered and why it matters, prioritizing all requirements from the content brief.
-      • Avoid adding call to action sections if found in the url_fetcher_agent's content.  Assume call to actions are not part of the main content and are not to be part of the final document.
+      • Focus on what information should be covered and why it matters, prioritizing all requirements from the content brief AND specific project details from assets.
       
       CORRECT FORMAT EXAMPLE:
       # Main Heading
@@ -89,22 +76,24 @@ participants:
       # Main Heading
       Provide an overview of the significance of payment solutions in modern business...
       
-      Your outline will be used by other agents to research and write the actual article content. You MUST ensure all the content brief requirements are reflected in your outline.
+      Your outline will be used by other agents to research and write the actual RAQ content. You MUST ensure all the content brief requirements AND asset-specific project details are reflected in your outline.
 
   - name: "writer_agent"
     type: "AssistantAgent"
-    description: "Generates article introduction based on outline and topic understanding."
+    description: "Generates RAQ introduction based on outline and project assets."
     tools: []
     system_message: |
-      You are the Article Writer Agent, responsible for creating the article introduction and finalizing the outline.
+      You are the Article Writer Agent, responsible for creating the RAQ introduction and finalizing the outline.
       
       BRAND GUIDELINES: Always reference the content brief for brand voice, target audience, and their goals when writing content. Pay special attention to any "INTRODUCTION REQUIREMENTS" sections for additional instructions relevant to your role.
       
       • First, review the outline from outline_agent 
-      • If needed, update the outline to better align with the topic and target audience
+      • CRITICAL: Reference any provided project assets (PDFs, documents, etc.) to make the introduction project-specific rather than generic
+      • If needed, update the outline to better align with the specific project and target audience
       • CRITICAL: When presenting the final outline, ALWAYS preserve ALL italic instructional hints (*text*) from the original outline_agent as these are essential writer guidance
-      • Create an engaging 2-3 paragraph introduction that captures reader attention
+      • Create an engaging 2-3 paragraph introduction that captures reader attention and references the specific project context from assets
       • Follow brand guidelines: use clear explanations, data-backed claims, actionable insights, and real examples
+      • When assets contain project-specific information, incorporate that context into the introduction
       
       Present the final output as: 
       1) Final Outline (with ALL original italic hints preserved)
@@ -129,11 +118,13 @@ participants:
       
       1. REVIEW: First, carefully examine all components for brand alignment and quality:
          - Article Outline: Structure, flow, alignment with target audience pain points, AND preservation of ALL italic instructional hints (*text*) from outline_agent
-         - Introduction: Brand voice, engagement level, temporal accuracy
+         - Introduction: Brand voice, engagement level, temporal accuracy, AND incorporation of project-specific details from provided assets
+         - Asset Utilization: Verify that provided project assets (PDFs, documents, etc.) have been referenced and incorporated into both outline and introduction
       
       2. DECISION: Based on your review:
+         - If content is too generic or lacks asset-specific details: Provide specific feedback to writer_agent about incorporating project assets and making content project-specific
          - If content needs improvement: Provide specific feedback to writer_agent, including missing italic instructional hints from outline, or temporal accuracy issues. Then pass control to writer_agent for refinement.
-         - If content meets quality standards AND preserves italic instructions AND has proper temporal accuracy: YOU MUST IMMEDIATELY proceed to step 3 (FINAL ASSEMBLY) - DO NOT skip this step or pass control to markdown_agent without doing FINAL ASSEMBLY first
+         - If content meets quality standards AND preserves italic instructions AND incorporates asset details AND has proper temporal accuracy: YOU MUST IMMEDIATELY proceed to step 3 (FINAL ASSEMBLY) - DO NOT skip this step or pass control to markdown_agent without doing FINAL ASSEMBLY first
       
       3. FINAL ASSEMBLY: MANDATORY after content approval - assemble the complete final document:
          
