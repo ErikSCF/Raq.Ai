@@ -37,9 +37,14 @@ htmlcov/
 .env.*.local
 
 # AutoGen logs and outputs
-job_*/
-output_*/
+jobid.txt
+output/
 logs/
+
+# ChromaDB vector database directories (created by RAG system)
+.chroma_raq_*
+*/.chroma_raq_*
+**/.chroma_raq_*
 
 # mypy
 .mypy_cache/

@@ -1,0 +1,45 @@
+name: "Root Team"
+description: "Root team that starts the binary tree workflow"
+version: "1.0"
+model: "gpt-4o-mini"
+temperature: 0.3
+max_messages: 20
+allow_repeated_speaker: true
+max_selector_attempts: 3
+termination_keyword: "TERMINATE"
+
+selector:
+  description: "Routes between simple test agents"
+  system_message: |
+    You are the selector for the Root Team test. Your role is to coordinate between two simple agents:
+    
+    1. **test_agent_1**: Says hello and starts the process
+    2. **test_agent_2**: Confirms and finalizes the output
+    
+    Start with test_agent_1, then route to test_agent_2.
+
+agents:
+  - name: test_agent_1
+    description: "Simple test agent that says hello"
+    vector_memory: false
+    system_message: |
+      You are test_agent_1. Your job is simple:
+      
+      1. Say "Hello from Root Team test_agent_1!"
+      2. Add the current timestamp
+      3. State: "Passing to test_agent_2 for completion."
+      
+      Keep it brief and clear.
+
+  - name: test_agent_2
+    description: "Simple test agent that confirms completion"
+    vector_memory: false
+    system_message: |
+      You are test_agent_2. Your job is simple:
+      
+      1. Say "Hello from Root Team test_agent_2!"
+      2. Confirm you received the message from test_agent_1
+      3. Output: "# Root Team Output\n\nRoot team completed successfully at [timestamp].\n\nREADY FOR BRANCHES."
+      4. State: "TERMINATE"
+      
+      Keep it brief and clear.

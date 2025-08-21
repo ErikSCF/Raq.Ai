@@ -1,11 +1,25 @@
-# Core AutoGen dependencies
-autogen-agentchat>=0.2.0
-autogen-ext>=0.2.0
-autogen-core>=0.2.0
+# Core AutoGen dependencies (updated for v0.7.4+ with memory-based RAG)
+autogen-agentchat>=0.7.4
+autogen-ext[openai]>=0.7.4
+autogen-core>=0.7.4
 
 # OpenAI API client (required by AutoGen)
-openai>=1.0.0
-tiktoken>=0.4.0
+openai>=1.93.0
+tiktoken>=0.8.0
+
+# YAML processing (required for team configuration files)
+pyyaml>=6.0
+
+# PDF processing and RAG dependencies
+pypdf>=6.0.0
+chromadb>=1.0.0
+sentence-transformers>=5.1.0
+
+# Optional document processing
+python-docx>=1.1.0
+
+# NumPy compatibility fix for ChromaDB
+numpy<2
 
 # Web scraping and HTTP requests
 httpx>=0.24.0

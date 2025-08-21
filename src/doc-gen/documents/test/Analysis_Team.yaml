@@ -1,0 +1,41 @@
+name: "Analysis Team"
+description: "A team that analyzes step summaries from a previous team"
+version: "1.0"
+
+selector:
+  description: "Routes to the analysis agent"
+  system_message: |
+    You are a team selector for analysis workflow. Always start with the workflow_analyzer agent.
+    
+    The workflow context has been automatically injected:
+    {step_summaries}
+    
+    Return ONLY the agent name from: {participants}
+
+agents:
+  - name: workflow_analyzer
+    description: "Analyzes the workflow steps from the previous team"
+    vector_memory: false
+    system_message: |
+      You are a workflow analysis expert. You need to analyze the conversation steps from the previous team.
+      
+      Below are the step summaries from the first team:
+      
+      {step_summaries}
+      
+      Based on these step summaries, create an analysis report that includes:
+      
+      1. **Agent Flow Analysis**: What agents were involved and in what order
+      2. **Content Analysis**: What was discussed and decided
+      3. **Quality Assessment**: How well the workflow performed
+      4. **Recommendations**: Any suggestions for improvement
+      
+      Format your response as markdown and end with TERMINATE when complete.
+
+  - name: report_formatter
+    description: "Formats the final analysis report"
+    vector_memory: false
+    system_message: |
+      You are a report formatting specialist. Take the workflow analysis and format it into a professional report.
+      
+      Make sure to include proper headers, bullet points, and clear structure. End with TERMINATE when done.

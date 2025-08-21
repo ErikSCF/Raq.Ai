@@ -1,0 +1,47 @@
+workflow:
+  name: "RAQ Document Generation"
+  description: "Enhanced binary-tree workflow with parallel analysis and smart context injection"
+  
+  # Default configuration for all teams (can be overridden per team)
+  model: "gpt-4o-mini"
+  temperature: 0.3
+  max_messages: 50
+  allow_repeated_speaker: false  # Force agent handoff - no repeated speakers
+  max_selector_attempts: 3
+  termination_keyword: "TERMINATE"
+  
+  teams:
+    - id: "epic_discovery"
+      template: "Epic_Discovery_Team.yaml"
+      output_file: "epic_discovery"
+      depends_on: null  # Root node - no dependencies
+      labeled_inputs:
+        - ["Content Brief", "brand_content_brief.md"]  # Needs brand context to start
+
+    - id: "document_assembly"
+      template: "Document_Assembly_Team.yaml"
+      output_file: "final_raq_document"
+      depends_on: "epic_discovery"
+      labeled_inputs:
+        - ["Epic Discovery Content", "epic_discovery.md"]
+        - ["Content Brief", "brand_content_brief.md"]
+      # Team-specific configuration overrides
+      max_messages: 30   # Document assembly needs more messages
+
+    - id: "epic_analysis"
+      template: "Process_Analysis_Team.yaml"
+      output_file: "epic_analysis"
+      depends_on: "epic_discovery"
+      labeled_inputs:
+        - ["Step Summaries", "epic_discovery.steps.md"]  # Just analyzing process, no brand context needed
+      # Team-specific configuration overrides
+      max_messages: 20   # Process analysis is more focused
+
+    - id: "document_analysis"
+      template: "Process_Analysis_Team.yaml"
+      output_file: "final_raw_document_analysis"
+      depends_on: "document_assembly"
+      labeled_inputs:
+        - ["Step Summaries", "final_raq_document.steps.md"]
+      # Team-specific configuration overrides  
+      max_messages: 20   # Process analysis is more focused

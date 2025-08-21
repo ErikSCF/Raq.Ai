@@ -5,19 +5,22 @@
   "version": "0.2.0",
   "configurations":  [
     {
-      "name": "PayTechApi",
+      "name": "Debug Current File",
       "type": "debugpy",
       "request": "launch",
-      "module": "uvicorn",
-      "cwd": "${workspaceFolder}/src",
-      "args": [
-        "api.server:app",
-        "--host",
-        "0.0.0.0",
-        "--port",
-        "8000"
-      ],
-      "console": "integratedTerminal"
+      "program": "${file}",
+      "cwd": "${workspaceFolder}",
+      "python": "${workspaceFolder}/venv/bin/python",
+      "console": "integratedTerminal",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/src/doc-gen"
+      },
+      "purpose": ["debug-test"],
+      "presentation": {
+        "hidden": false,
+        "group": "RAQ.AI",
+        "order": 1
+      }
     }
   ]
 }

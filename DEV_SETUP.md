@@ -57,7 +57,90 @@ src/doc-gen/
 └── content_briefs/            # Brand content brief templates
     ├── payment_comparisons.md
     └── payment_termonology.md
+
+├── Process_Analysis_Team.yaml  # Analysis team configuration
+├── tools_config.yaml          # Tools and functions config
+└── content_briefs/            # Brand content brief templates
+    ├── payment_comparisons.md
+    └── payment_termonology.md
+
+# Root-level runner files
+run-pipeline.py                 # Generic workflow runner (configurable via workflow.yaml)
+job_utils.py                   # Job ID management utilities
+jobid.txt                      # Sequential job ID tracker (0001, 0002, etc.)
+output/                        # Generated job folders (0001/, 0002/, etc.)
+documents/                     # Document type configurations
+└── RAQ/                       # RAQ document type
+    ├── workflow.yaml          # Team execution order and dependencies
+    ├── Content_Planning_Team.yaml
+    ├── Content_Production_Team.yaml
+    ├── Content_Process_Analysis_Team.yaml
+    └── brand_content_brief.md
 ```
+
+## Usage
+
+### Running the Workflows
+
+```bash
+# Navigate to the project
+cd /Users/erik/RAQ/Raq.Ai
+
+# Activate environment
+./activate_env.sh
+
+# Run the generic workflow pipeline
+python run-pipeline.py          # Executes teams based on workflow.yaml configuration
+```
+
+### Generic Workflow System
+
+The new workflow system uses configurable YAML files to define team execution:
+
+- **Document Types**: Each document type (e.g., RAQ) has its own folder in `/documents/`
+- **Workflow Configuration**: `workflow.yaml` defines team execution order and dependencies
+- **Team Files**: All team YAML configurations are stored in the document type folder
+- **Flexible Execution**: Change workflow by editing `workflow.yaml` instead of code
+
+### VS Code Debug Configurations
+
+The project includes debug configuration in `.vscode/launch.json`:
+
+1. **RAQ.AI Full Pipeline Runner** - Debug `run-pipeline.py`  
+
+### Workflow Configuration
+
+The workflow is controlled by `documents/RAQ/workflow.yaml`:
+
+```yaml
+workflow:
+  name: "RAQ Document Generation"
+  teams:
+    - name: "Content_Planning_Team"
+      depends_on: []  # First team
+      output_file: "planning_output.md"
+    
+    - name: "Content_Production_Team" 
+      depends_on: ["Content_Planning_Team"]
+      output_file: "production_output.md"
+    
+    - name: "Content_Process_Analysis_Team"
+      depends_on: ["Content_Planning_Team", "Content_Production_Team"]
+      output_file: "process_analysis.md"
+```
+
+### Runner Configuration
+
+The runner has configuration constants at the top of the file:
+
+```python
+# Edit these constants as needed
+USER_INPUT = "Create a comprehensive guide about..."
+TEMPLATE_URL = None  # Optional
+CONTENT_BRIEF_TYPE = "payment_comparisons"
+
+# For production-only runner:
+TARGET_JOB_ID = 2  # Rerun production using job 0002's planning output
 
 ## Usage
 

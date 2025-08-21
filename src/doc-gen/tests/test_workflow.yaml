@@ -1,0 +1,58 @@
+workflow:
+  model: 'gpt-4o-mini'
+  temperature: 0.3
+  max_messages: 50
+  allow_repeated_speaker: false
+  max_selector_attempts: 3
+  termination_keyword: 'TERMINATE'
+  teams:
+    - id: 'data_collection'
+      template: 'DataCollection.yaml'
+      output_file: 'data_collection.md'
+      # Test properties - succeeds quickly
+      test_delay_seconds: 0.2
+      test_progress_steps: 3
+    
+    - id: 'analysis_team'
+      template: 'Analysis.yaml'
+      output_file: 'analysis.md'
+      depends_on: 'data_collection'
+      # Test properties - slower but succeeds
+      test_delay_seconds: 0.3
+      test_progress_steps: 4
+    
+    - id: 'validation_team'
+      template: 'Validation.yaml'
+      output_file: 'validation.md'
+      depends_on: 'data_collection'
+      # Test properties - parallel to analysis, quick success
+      test_delay_seconds: 0.15
+      test_progress_steps: 2
+    
+    - id: 'report_generation'
+      template: 'ReportGeneration.yaml'
+      output_file: 'final_report.md'
+      depends_on: 'analysis_team,validation_team'
+      # Test properties - depends on both analysis and validation
+      test_delay_seconds: 0.25
+      test_progress_steps: 3
+    
+    - id: 'flaky_team'
+      template: 'FlakyTeam.yaml'
+      output_file: 'flaky_output.md'
+      # Test properties - 70% chance of success (flaky behavior)
+      test_success_probability: 0.7
+      test_delay_seconds: 0.1
+      test_progress_steps: 2
+    
+    - id: 'failing_team'
+      template: 'FailingTeam.yaml'
+      output_file: 'failing_output.md'
+      depends_on: 'flaky_team'
+      # Test properties - will fail after partial progress
+      test_delay_seconds: 0.2
+      test_progress_steps: 4
+      test_failure_delay: 0.1
+      test_failure_mode: 'partial_failure'
+      test_partial_output: true
+      test_failure_message: 'Simulated processing error'

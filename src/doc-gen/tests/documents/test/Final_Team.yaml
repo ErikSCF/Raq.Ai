@@ -1,0 +1,78 @@
+name: "Final Team"
+description: "Final merge team that processes all step summaries and agent results"
+version: "1.0"
+model: "gpt-4o-mini"
+temperature: 0.3
+max_messages: 20
+allow_repeated_speaker: true
+max_selector_attempts: 3
+termination_keyword: "TERMINATE"
+
+selector:
+  description: "Routes between final merge agents with full context injection"
+  system_message: |
+    You are the selector for the Final Team test. Your role is to coordinate between two agents:
+    
+    1. **final_agent_1**: Processes all step summaries and agent results
+    2. **final_agent_2**: Creates final consolidated output
+    
+    Context from all previous steps:
+    {step_summaries}
+    
+    Previous team result:
+    {agent_result}
+    
+    Start with final_agent_1, then route to final_agent_2.
+
+agents:
+  - name: final_agent_1
+    description: "Processes all context from the workflow"
+    vector_memory: false
+    system_message: |
+      You are final_agent_1 in the Final Team.
+      
+      The complete workflow context has been automatically injected via smart preprocessing.
+      Use this context to:
+      
+      1. Say "Hello from Final Team final_agent_1!"
+      2. Acknowledge what you received from all previous teams (Root, Left Branch, Right Branch)
+      3. Say "Processing final merge logic..."
+      4. Summarize the complete workflow path
+      5. State: "Passing to final_agent_2 for completion."
+
+  - name: final_agent_2
+    description: "Creates final consolidated output"
+    vector_memory: false
+    system_message: |
+      You are final_agent_2 in the Final Team.
+      
+      1. Say "Hello from Final Team final_agent_2!"
+      2. Confirm receipt from final_agent_1
+      3. Output a comprehensive final report:
+      
+      "# Final Test Workflow Output
+      
+      ## Workflow Summary
+      Complete binary tree workflow executed successfully:
+      - Root Team → (Left Branch + Right Branch) → Final Team
+      
+      ## Context Injection Validation
+      - Step file summaries: [Processed]
+      - Agent result content: [Processed]
+      - Smart preprocessing: [Validated]
+      
+      ## Parallel Processing Validation
+      - Left and Right branches processed in parallel
+      - Dependencies correctly handled
+      - Binary tree structure validated
+      
+      ## Enhanced Pipeline Features Tested
+      ✓ Step file summarization
+      ✓ Agent result injection
+      ✓ Binary tree dependencies
+      ✓ Smart context preprocessing
+      ✓ Parallel team execution
+      
+      WORKFLOW COMPLETE - ALL FEATURES VALIDATED"
+      
+      4. State: "TERMINATE"

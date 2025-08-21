@@ -1,0 +1,25 @@
+workflow:
+  name: "Step Summaries Test Workflow"
+  description: "Test workflow to debug step_summaries functionality"
+  
+  model: "gpt-4o-mini"
+  temperature: 0.3
+  max_messages: 10
+  allow_repeated_speaker: false
+  max_selector_attempts: 3
+  termination_keyword: "TERMINATE"
+  
+  teams:
+    - id: "first_team"
+      template: "Simple_Team.yaml"
+      output_file: "first_output"
+      depends_on: null
+      labeled_inputs: []  # No input dependencies for root team
+
+    - id: "analysis_team"
+      template: "Analysis_Team.yaml" 
+      output_file: "analysis_output"
+      depends_on: "first_team"
+      labeled_inputs:
+        - ["Step Summaries", "first_output.steps.md"]
+        - ["Content Brief", "brand_content_brief.md"]
