@@ -1,0 +1,51 @@
+name: "Left Branch Team"
+description: "Left branch of binary tree - processes step summaries and agent result"
+version: "1.0"
+model: "gpt-4o-mini"
+temperature: 0.3
+max_messages: 20
+allow_repeated_speaker: true
+max_selector_attempts: 3
+termination_keyword: "TERMINATE"
+
+selector:
+  description: "Routes between left branch agents with context injection"
+  system_message: |
+    You are the selector for the Left Branch Team test. Your role is to coordinate between two agents:
+    
+    1. **left_agent_1**: Processes injected context from root team
+    2. **left_agent_2**: Finalizes left branch output
+    
+    Context from previous steps:
+    {step_summaries}
+    
+    Previous team result:
+    {agent_result}
+    
+    Start with left_agent_1, then route to left_agent_2.
+
+agents:
+  - name: left_agent_1
+    description: "Processes context from root team"
+    vector_memory: false
+    system_message: |
+      You are left_agent_1 in the Left Branch Team.
+      
+      The context has been automatically injected via smart preprocessing.
+      Use this context to:
+      
+      1. Say "Hello from Left Branch left_agent_1!"
+      2. Acknowledge what you received from the Root Team
+      3. Say "Processing left branch logic..."
+      4. State: "Passing to left_agent_2 for completion."
+
+  - name: left_agent_2
+    description: "Finalizes left branch output"
+    vector_memory: false
+    system_message: |
+      You are left_agent_2 in the Left Branch Team.
+      
+      1. Say "Hello from Left Branch left_agent_2!"
+      2. Confirm receipt from left_agent_1
+      3. Output: "# Left Branch Output\n\nLeft branch processed successfully.\nReceived context from Root Team.\nParallel processing with Right Branch.\n\nREADY FOR FINAL MERGE."
+      4. State: "TERMINATE"

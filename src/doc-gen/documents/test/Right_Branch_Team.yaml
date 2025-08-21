@@ -1,0 +1,51 @@
+name: "Right Branch Team"
+description: "Right branch of binary tree - parallel processing with left branch"
+version: "1.0"
+model: "gpt-4o-mini"
+temperature: 0.3
+max_messages: 20
+allow_repeated_speaker: true
+max_selector_attempts: 3
+termination_keyword: "TERMINATE"
+
+selector:
+  description: "Routes between right branch agents with context injection"
+  system_message: |
+    You are the selector for the Right Branch Team test. Your role is to coordinate between two agents:
+    
+    1. **right_agent_1**: Processes injected context from root team
+    2. **right_agent_2**: Finalizes right branch output
+    
+    Context from previous steps:
+    {step_summaries}
+    
+    Previous team result:
+    {agent_result}
+    
+    Start with right_agent_1, then route to right_agent_2.
+
+agents:
+  - name: right_agent_1
+    description: "Processes context from root team"
+    vector_memory: false
+    system_message: |
+      You are right_agent_1 in the Right Branch Team.
+      
+      The context has been automatically injected via smart preprocessing.
+      Use this context to:
+      
+      1. Say "Hello from Right Branch right_agent_1!"
+      2. Acknowledge what you received from the Root Team
+      3. Say "Processing right branch logic..."
+      4. State: "Passing to right_agent_2 for completion."
+
+  - name: right_agent_2
+    description: "Finalizes right branch output"
+    vector_memory: false
+    system_message: |
+      You are right_agent_2 in the Right Branch Team.
+      
+      1. Say "Hello from Right Branch right_agent_2!"
+      2. Confirm receipt from right_agent_1
+      3. Output: "# Right Branch Output\n\nRight branch processed successfully.\nReceived context from Root Team.\nParallel processing with Left Branch.\n\nREADY FOR FINAL MERGE."
+      4. State: "TERMINATE"

@@ -1,0 +1,34 @@
+workflow:
+  name: "RAQ Document Generation"
+  description: "Enhanced binary-tree workflow with parallel analysis and smart context injection"
+  teams:
+    - name: "Epic_Discovery_Team"
+      output_file: "epic_discovery"
+      depends_on: null  # Root node - no dependencies
+      input_files: []
+      step_files: []     # No previous steps to summarize
+      agent_result: null # No previous agent result
+
+    - name: "Document_Assembly_Team"
+      output_file: "final_raq_document"
+      depends_on: "Epic_Discovery_Team"  # Parallel to Process_Analysis_Team
+      input_files:
+        - "epic_discovery.md"  # Needs the epic discovery output for aggregation
+      step_files: []     # Doesn't need step summaries
+      agent_result: null # Content is in the input file
+
+    - name: "Process_Analysis_Team"
+      output_file: "epic_analysis"
+      depends_on: "Epic_Discovery_Team"  # Parallel analysis of epic discovery
+      input_files: []
+      step_files:
+        - "epic_discovery.steps.md"  # Analysis team needs step summaries
+      agent_result: null  # Not needed - result is in step summaries
+
+    - name: "Process_Analysis_Team"
+      output_file: "final_raw_document_analysis"
+      depends_on: "Document_Assembly_Team"  # Sequential analysis of assembled document
+      input_files: []
+      step_files:
+        - "final_raq_document.steps.md"  # Analysis team needs step summaries
+      agent_result: null  # Not needed - result is in step summaries

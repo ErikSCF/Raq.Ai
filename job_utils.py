@@ -7,6 +7,99 @@ This module provides functions for managing sequential job IDs stored in jobid.t
 
 from pathlib import Path
 
+def get_next_job_id_for_document_type(document_type: str, output_base_path: Path = None) -> str:
+    """
+    Get the next sequential job ID for a specific document type.
+    Creates document-type-specific directory and jobid.txt file if they don't exist.
+    
+    Args:
+        document_type: Document type (e.g., 'RAQ', 'test', etc.)
+        output_base_path: Base output directory. Defaults to 'output' in current directory.
+        
+    Returns:
+        str: Next job ID as a 4-digit string (e.g., "0003")
+    """
+    if output_base_path is None:
+        output_base_path = Path.cwd() / "output"
+    
+    # Create document-type-specific directory
+    doc_type_dir = output_base_path / document_type
+    doc_type_dir.mkdir(parents=True, exist_ok=True)
+    
+    jobid_file = doc_type_dir / "jobid.txt"
+    
+    if not jobid_file.exists():
+        # Create initial job ID file
+        current_id = 1
+        with open(jobid_file, 'w') as f:
+            f.write("0001")
+    else:
+        # Read current job ID and increment
+        with open(jobid_file, 'r') as f:
+            current_id_str = f.read().strip()
+            current_id = int(current_id_str) + 1
+    
+    # Format as 4-digit string and update file
+    new_job_id = f"{current_id:04d}"
+    with open(jobid_file, 'w') as f:
+        f.write(new_job_id)
+    
+    return new_job_id
+
+def peek_current_job_id_for_document_type(document_type: str, output_base_path: Path = None) -> str:
+    """
+    Peek at the current job ID for a specific document type without incrementing.
+    
+    Args:
+        document_type: Document type (e.g., 'RAQ', 'test', etc.)
+        output_base_path: Base output directory. Defaults to 'output' in current directory.
+        
+    Returns:
+        str: Current job ID as a 4-digit string, or "0000" if no jobs exist yet
+    """
+    if output_base_path is None:
+        output_base_path = Path.cwd() / "output"
+    
+    doc_type_dir = output_base_path / document_type
+    jobid_file = doc_type_dir / "jobid.txt"
+    
+    if not jobid_file.exists():
+        return "0000"
+    
+    with open(jobid_file, 'r') as f:
+        return f.read().strip()
+
+def get_job_history_for_document_type(document_type: str, output_base_path: Path = None, limit: int = 20) -> list:
+    """
+    Get a list of existing job IDs for a specific document type, sorted by creation time.
+    
+    Args:
+        document_type: Document type (e.g., 'RAQ', 'test', etc.)
+        output_base_path: Base output directory. Defaults to 'output' in current directory.
+        limit: Maximum number of jobs to return (default: 20)
+        
+    Returns:
+        list: List of job ID strings, sorted by most recent first
+    """
+    if output_base_path is None:
+        output_base_path = Path.cwd() / "output"
+    
+    doc_type_dir = output_base_path / document_type
+    
+    if not doc_type_dir.exists():
+        return []
+    
+    # Get all job directories (4-digit numbers)
+    job_dirs = []
+    for item in doc_type_dir.iterdir():
+        if item.is_dir() and item.name.isdigit() and len(item.name) == 4:
+            job_dirs.append(item)
+    
+    # Sort by modification time (most recent first) and return names
+    job_dirs.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+    return [job_dir.name for job_dir in job_dirs[:limit]]
+
+# Legacy functions for backward compatibility
 def get_next_job_id(base_path: Path = None) -> str:
     """
     Get the next sequential job ID from jobid.txt file.

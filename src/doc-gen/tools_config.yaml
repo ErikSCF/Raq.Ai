@@ -1,3 +1,6 @@
+team:
+  label: "Content Analysis Team"
+  selector_prompt:
 tools:
   fetch_webpage:
     name: "fetch_webpage"
@@ -114,3 +117,60 @@ tools:
               if len(results) >= max_results:
                   break
           return results
+
+  read_file:
+    name: "read_file"
+    description: "Read the contents of a file from the job directory."
+    source_code: |
+      import os
+      import glob
+      from pathlib import Path
+
+      def read_file(filename: str) -> str:
+          """
+          Read the contents of a file from the job directory.
+          
+          Args:
+              filename: The name of the file to read
+              
+          Returns:
+              str: Contents of the file
+              
+          Raises:
+              FileNotFoundError: If the file cannot be found
+          """
+          # Strategy 1: Try relative path from current working directory
+          if os.path.exists(filename):
+              with open(filename, 'r', encoding='utf-8') as f:
+                  return f.read()
+          
+          # Strategy 2: Try from current working directory
+          cwd_path = os.path.join(os.getcwd(), filename)
+          if os.path.exists(cwd_path):
+              with open(cwd_path, 'r', encoding='utf-8') as f:
+                  return f.read()
+          
+          # Strategy 3: Search in job directories under output/
+          # Use current working directory as base since __file__ is not available in autogen context
+          cwd = os.getcwd()
+          
+          # Look for output directories
+          output_dir = os.path.join(cwd, "output")
+          if os.path.exists(output_dir):
+              # Search in job directories
+              for job_folder in os.listdir(output_dir):
+                  job_path = os.path.join(output_dir, job_folder)
+                  if os.path.isdir(job_path):
+                      file_path = os.path.join(job_path, filename)
+                      if os.path.exists(file_path):
+                          with open(file_path, 'r', encoding='utf-8') as f:
+                              return f.read()
+          
+          # Strategy 4: Search more broadly in current working directory
+          for root, dirs, files in os.walk(cwd):
+              if filename in files:
+                  file_path = os.path.join(root, filename)
+                  with open(file_path, 'r', encoding='utf-8') as f:
+                      return f.read()
+          
+          raise FileNotFoundError(f"Could not find file '{filename}' in any expected location")

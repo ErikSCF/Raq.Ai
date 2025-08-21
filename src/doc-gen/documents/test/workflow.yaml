@@ -1,0 +1,33 @@
+workflow:
+  name: "Test Workflow - Enhanced Pipeline Testing"
+  description: "Simple test workflow to validate enhanced pipeline features including parallel processing, step files, and agent result injection"
+  
+  teams:
+    - name: "Root_Team"
+      output_file: "root_output.md"
+      depends_on: null  # Root node - no dependencies
+      step_files: []
+      agent_result: null
+    
+    - name: "Left_Branch_Team" 
+      output_file: "left_output.md"
+      depends_on: "Root_Team"  # Single dependency (binary tree)
+      step_files:
+        - "root_output_steps.md"
+      agent_result: "root_output.md"
+    
+    - name: "Right_Branch_Team"
+      output_file: "right_output.md" 
+      depends_on: "Root_Team"  # Single dependency (binary tree) - parallel with Left_Branch
+      step_files:
+        - "root_output_steps.md"
+      agent_result: "root_output.md"
+    
+    - name: "Final_Team"
+      output_file: "final_output.md"
+      depends_on: "Left_Branch_Team"  # Could be either branch for final merge
+      step_files:
+        - "root_output_steps.md"
+        - "left_output_steps.md"
+        - "right_output_steps.md"
+      agent_result: "left_output.md"
