@@ -1,0 +1,116 @@
+tools:
+  fetch_webpage:
+    name: "fetch_webpage"
+    description: "Fetch a webpage and convert it to markdown format."
+    source_code: |
+      from typing import Optional, Dict
+      import httpx
+      from bs4 import BeautifulSoup
+      import html2text
+      from urllib.parse import urljoin
+
+
+      async def fetch_webpage(
+          url: str, 
+          include_images: bool = False, 
+          max_length: Optional[int] = None, 
+          headers: Optional[Dict[str, str]] = None
+      ) -> str:
+          """Fetch a webpage and convert it to markdown format.
+
+          Args:
+              url: The URL of the webpage to fetch
+              include_images: Whether to include image references in the markdown
+              max_length: Maximum length of the output markdown (if None, no limit)
+              headers: Optional HTTP headers for the request
+
+          Returns:
+              str: Markdown version of the webpage content
+
+          Raises:
+              ValueError: If the URL is invalid or the page can't be fetched
+          """
+          # Use default headers if none provided
+          if headers is None:
+              headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+
+          try:
+              # Fetch the webpage
+              async with httpx.AsyncClient() as client:
+                  response = await client.get(url, headers=headers, timeout=10)
+                  response.raise_for_status()
+
+                  # Parse HTML
+                  soup = BeautifulSoup(response.text, "html.parser")
+
+                  # Remove script and style elements
+                  for script in soup(["script", "style"]):
+                      script.decompose()
+
+                  # Convert relative URLs to absolute
+                  for tag in soup.find_all(["a", "img"]):
+                      if tag.get("href"):
+                          tag["href"] = urljoin(url, tag["href"])
+                      if tag.get("src"):
+                          tag["src"] = urljoin(url, tag["src"])
+
+                  # Configure HTML to Markdown converter
+                  h2t = html2text.HTML2Text()
+                  h2t.body_width = 0  # No line wrapping
+                  h2t.ignore_images = not include_images
+                  h2t.ignore_emphasis = False
+                  h2t.ignore_links = False
+                  h2t.ignore_tables = False
+
+                  # Convert to markdown
+                  markdown = h2t.handle(str(soup))
+
+                  # Trim if max_length is specified
+                  if max_length and len(markdown) > max_length:
+                      markdown = markdown[:max_length] + "\n...(truncated)"
+
+                  return markdown.strip()
+
+          except httpx.RequestError as e:
+              raise ValueError(f"Failed to fetch webpage: {str(e)}") from e
+          except Exception as e:
+              raise ValueError(f"Error processing webpage: {str(e)}") from e
+
+  duckduckgo_search:
+    name: "duckduckgo_search"
+    description: "Search DuckDuckGo for relevant facts, statistics, and authoritative sources. Returns a list of results with titles, snippets, and URLs."
+    source_code: |
+      import requests
+      from typing import List, Dict
+
+      def duckduckgo_search(query: str, max_results: int = 10) -> List[Dict[str, str]]:
+          """
+          Search DuckDuckGo for a query and return a list of results.
+
+          Args:
+              query: The search query string
+              max_results: Maximum number of results to return
+
+          Returns:
+              List of dicts with 'title', 'snippet', and 'url' for each result
+          """
+          url = f"https://duckduckgo.com/html/?q={query}"
+          headers = {"User-Agent": "Mozilla/5.0"}
+          response = requests.get(url, headers=headers)
+          response.raise_for_status()
+          results = []
+          from bs4 import BeautifulSoup
+          soup = BeautifulSoup(response.text, "html.parser")
+          for result in soup.find_all('div', class_='result__body'):
+              title_tag = result.find('a', class_='result__a')
+              snippet_tag = result.find('a', class_='result__snippet')
+              url_tag = result.find('a', class_='result__a')
+              if title_tag and url_tag:
+                  results.append({
+                      'title': title_tag.get_text(strip=True),
+                      'snippet': snippet_tag.get_text(strip=True) if snippet_tag else '',
+                      'url': url_tag['href']
+                  })
+              if len(results) >= max_results:
+                  break
+          return results

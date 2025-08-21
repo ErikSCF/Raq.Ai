@@ -1,0 +1,28 @@
+# Core AutoGen dependencies
+autogen-agentchat>=0.2.0
+autogen-ext>=0.2.0
+autogen-core>=0.2.0
+
+# OpenAI API client (required by AutoGen)
+openai>=1.0.0
+tiktoken>=0.4.0
+
+# Web scraping and HTTP requests
+httpx>=0.24.0
+beautifulsoup4>=4.12.0
+html2text>=2020.1.16
+
+# YAML processing
+PyYAML>=6.0
+
+# Development dependencies
+pytest>=7.0.0
+pytest-asyncio>=0.21.0
+
+# Optional: Code formatting and linting
+black>=23.0.0
+flake8>=6.0.0
+
+# Optional: Jupyter notebook support (if needed for development)
+jupyter>=1.0.0
+ipykernel>=6.0.0

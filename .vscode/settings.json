@@ -1,0 +1,22 @@
+{
+  "cSpell.words": [
+    "awsx",
+    "dotenv",
+    "fargate",
+    "fastapi",
+    "objectagg",
+    "paytechguide",
+    "payterra",
+    "pipenv",
+    "pipfile",
+    "pulumi",
+    "pydantic",
+    "starlette",
+    "uvicorn"
+  ],
+    "workbench.colorCustomizations": {
+    "titleBar.activeBackground": "#422a5d",
+    "activityBar.background": "#2d213b",
+    "activityBar.foreground": "#a086ad"
+  }
+}
