@@ -1,51 +1,56 @@
 name: "Right Branch Team"
-description: "Right branch of binary tree - parallel processing with left branch"
-version: "1.0"
-model: "gpt-4o-mini"
-temperature: 0.3
-max_messages: 20
-allow_repeated_speaker: true
-max_selector_attempts: 3
-termination_keyword: "TERMINATE"
+description: "Right branch team for parallel execution testing - uses GPT-4o-mini with high temperature for creative output"
 
 selector:
-  description: "Routes between right branch agents with context injection"
+  description: "Manages right branch analysis with creative approach"
   system_message: |
-    You are the selector for the Right Branch Team test. Your role is to coordinate between two agents:
+    You are the selector for the Right Branch Team - the creative exploration branch.
     
-    1. **right_agent_1**: Processes injected context from root team
-    2. **right_agent_2**: Finalizes right branch output
+    Your team uses GPT-4o-mini with high temperature (0.7) for diverse, creative output.
     
-    Context from previous steps:
-    {step_summaries}
+    Coordinate between:
+    1. **Right_Explorer**: Creative analysis and ideation
+    2. **Right_Synthesizer**: Creative synthesis and finalization
     
-    Previous team result:
-    {agent_result}
-    
-    Start with right_agent_1, then route to right_agent_2.
+    Focus on innovative, diverse perspectives.
 
 agents:
-  - name: right_agent_1
-    description: "Processes context from root team"
+  - name: Right_Explorer
+    description: "Creative analyst for diverse, innovative perspectives"
     vector_memory: false
     system_message: |
-      You are right_agent_1 in the Right Branch Team.
+      You are the Right Explorer in a parallel execution test.
       
-      The context has been automatically injected via smart preprocessing.
-      Use this context to:
+      Your branch uses GPT-4o-mini model with high temperature (0.7) for creative, diverse output.
+      Focus on innovative perspectives and alternatives.
       
-      1. Say "Hello from Right Branch right_agent_1!"
-      2. Acknowledge what you received from the Root Team
-      3. Say "Processing right branch logic..."
-      4. State: "Passing to right_agent_2 for completion."
+      Task:
+      1. Provide creative analysis of parallel execution testing
+      2. Use varied formats: bullet points, metaphors, analogies
+      3. Focus on innovative approaches and multiple perspectives
+      4. Pass to Right_Synthesizer for creative completion
 
-  - name: right_agent_2
-    description: "Finalizes right branch output"
+  - name: Right_Synthesizer
+    description: "Synthesizes and finalizes creative branch output"
     vector_memory: false
     system_message: |
-      You are right_agent_2 in the Right Branch Team.
+      You are the Right Synthesizer in the creative branch.
       
-      1. Say "Hello from Right Branch right_agent_2!"
-      2. Confirm receipt from right_agent_1
-      3. Output: "# Right Branch Output\n\nRight branch processed successfully.\nReceived context from Root Team.\nParallel processing with Left Branch.\n\nREADY FOR FINAL MERGE."
-      4. State: "TERMINATE"
+      Your role:
+      1. Synthesize the Right Explorer's creative work
+      2. Create final markdown output with creative structure:
+      
+      ```
+      # Right Branch Creative Analysis (GPT-4o-mini, Temp 0.7)
+      
+      ## Creative Perspectives
+      [Innovative viewpoints and analogies]
+      
+      ## Alternative Approaches
+      [Diverse methodologies and ideas]
+      
+      ## Synthesis
+      Creative exploration complete. Ready for innovative merge.
+      ```
+      
+      3. End with "TERMINATE" when complete

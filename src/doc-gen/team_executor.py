@@ -25,15 +25,11 @@ from task_builder import TaskBuilder
 class TeamExecutor:
     """Handles AutoGen team creation and execution."""
     
-    def __init__(self, base_dir: Path = None):
+    def __init__(self, base_dir: Path = None, workflow_manager=None):
         self.base_dir = base_dir or Path(__file__).parent
         self.tools_config_path = self.base_dir / "tools_config.yaml"
         self.task_builder = TaskBuilder()
-    
-    def load_yaml_file(self, file_path: Path) -> Dict[str, Any]:
-        """Load YAML file and return parsed data."""
-        with open(file_path, 'r', encoding='utf-8') as f:
-            return yaml.safe_load(f)
+        self.workflow_manager = workflow_manager
     
     async def execute_team(self, yaml_config_path: Path, output_file_path: Path, team_name: str, 
                           job_id: str, user_input: str, external_urls: Optional[List[str]], 
@@ -51,23 +47,27 @@ class TeamExecutor:
             print(f"External URLs: {external_urls}")
         
         try:
-            # Load the YAML configuration
-            team_config = self.load_yaml_file(yaml_config_path)
+            # Get everything from workflow manager - it handles all YAML loading internally
+            team_config = self.workflow_manager.get_team_config(team_name)
             
-            # Create model client with config from team
-            team_model = team_config.get('model', 'gpt-4o-mini')
-            team_temperature = team_config.get('temperature', 0.3)
+            # Extract values for AutoGen setup
+            team_model = team_config['model']
+            team_temperature = team_config['temperature']
+            max_messages = team_config['max_messages']
+            allow_repeated_speaker = team_config['allow_repeated_speaker']
+            max_selector_attempts = team_config['max_selector_attempts']
+            termination_keyword = team_config['termination_keyword']
             
             model_client = OpenAIChatCompletionClient(
                 model=team_model,
                 temperature=team_temperature
             )
             
-            # Create agents dynamically from YAML config
+            # Create agents - workflow manager provides agent structure too
             agents = self._create_agents(team_config, model_client, step_summaries, 
                                        agent_result_content, memory)
             
-            # Prepare enhanced selector prompt with smart context injection
+            # Get selector prompt from workflow manager
             selector_prompt = team_config['selector']['system_message']
             files_list = input_files if input_files is not None else []
             
@@ -75,18 +75,18 @@ class TeamExecutor:
             selector_prompt = self.task_builder.prepare_template_variables(
                 selector_prompt, files_list, step_summaries, agent_result_content
             )
-            
+
             # Create team with enhanced selector handling
-            termination_keyword = team_config.get('config', {}).get('termination_keyword', 'TERMINATE')
-            
             team = SelectorGroupChat(
                 participants=list(agents.values()),
                 termination_condition=OrTerminationCondition(
-                    MaxMessageTermination(team_config.get('config', {}).get('max_messages', 50)),
+                    MaxMessageTermination(max_messages),
                     TextMentionTermination(termination_keyword)
                 ),
                 model_client=model_client,
-                selector_prompt=selector_prompt
+                selector_prompt=selector_prompt,
+                allow_repeated_speaker=allow_repeated_speaker,
+                max_selector_attempts=max_selector_attempts
             )
             
             # Prepare task message
@@ -99,11 +99,11 @@ class TeamExecutor:
             # Execute team and handle output
             success = await self._execute_team_conversation(
                 team, task_message, output_file_path, team_name, job_id, 
-                brief_content, cancellation_flag
+                brief_content, cancellation_flag, team_config
             )
             
             return success
-            
+
         except Exception as e:
             print(f"✗ Error running {team_name}: {e}")
             import traceback
@@ -117,10 +117,13 @@ class TeamExecutor:
     
     def _create_agents(self, team_config: Dict[str, Any], model_client, step_summaries: str, 
                       agent_result_content: str, memory) -> Dict[str, AssistantAgent]:
-        """Create agents dynamically from YAML config."""
+        """Create agents dynamically from team config."""
         agents = {}
         
-        for agent_config in team_config['agents']:
+        # Get agents list from team config
+        agents_config = team_config['agents']
+        
+        for agent_config in agents_config:
             agent_name = agent_config['name']
             
             # Get system message and inject context if needed
@@ -163,7 +166,8 @@ class TeamExecutor:
         for tool_item in tool_configs:
             if isinstance(tool_item, str):
                 # Tool name reference - look up in tools config file
-                tools_config = self.load_yaml_file(self.tools_config_path)
+                with open(self.tools_config_path, 'r', encoding='utf-8') as f:
+                    tools_config = yaml.safe_load(f)
                 if tool_item in tools_config['tools']:
                     tool_config = tools_config['tools'][tool_item]
                     
@@ -210,7 +214,7 @@ class TeamExecutor:
     
     async def _execute_team_conversation(self, team, task_message: str, output_file_path: Path, 
                                        team_name: str, job_id: str, brief_content: str, 
-                                       cancellation_flag) -> bool:
+                                       cancellation_flag, team_config: dict) -> bool:
         """Execute team conversation and handle real-time output."""
         
         # Prepare file paths for real-time logging using new naming convention
@@ -223,6 +227,15 @@ class TeamExecutor:
             f.write(f"# {team_name.replace('_', ' ')} - Conversation Steps\n\n")
             f.write(f"*Job ID: {job_id}*\n")
             f.write(f"*Timestamp: {datetime.now().isoformat()}*\n\n")
+            
+            # Add configuration information
+            f.write("## Team Configuration\n\n")
+            f.write(f"- **Model**: {team_config.get('model', 'N/A')}\n")
+            f.write(f"- **Temperature**: {team_config.get('temperature', 'N/A')}\n")
+            f.write(f"- **Max Messages**: {team_config.get('max_messages', 'N/A')}\n")
+            f.write(f"- **Allow Repeated Speaker**: {team_config.get('allow_repeated_speaker', 'N/A')}\n")
+            f.write(f"- **Max Selector Attempts**: {team_config.get('max_selector_attempts', 'N/A')}\n")
+            f.write(f"- **Termination Keyword**: {team_config.get('termination_keyword', 'N/A')}\n\n")
         with open(raw_file, 'w', encoding='utf-8') as f:
             f.write(f"# {team_name.replace('_', ' ')} - Raw Debug Data\n\n")
             f.write(f"Job ID: {job_id}\n")

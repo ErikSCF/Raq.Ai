@@ -35,7 +35,7 @@ class PipelineRunner:
         # Initialize managers
         self.workflow_manager = WorkflowManager(self.base_dir)
         self.job_manager = JobManager(self.base_dir)
-        self.team_executor = TeamExecutor(self.base_dir)
+        self.team_executor = TeamExecutor(self.base_dir, self.workflow_manager)
         
         # Runtime state
         self.asset_manager = None
@@ -231,7 +231,7 @@ class PipelineRunner:
         success = await self.team_executor.execute_team(
             team_yaml,
             output_file,
-            team_name.replace('_', ' ').replace('Content ', 'Content '),
+            team_name,  # Use actual team name, not display name
             job_id,
             user_input,
             external_urls,

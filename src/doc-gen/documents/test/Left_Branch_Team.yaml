@@ -1,51 +1,56 @@
 name: "Left Branch Team"
-description: "Left branch of binary tree - processes step summaries and agent result"
-version: "1.0"
-model: "gpt-4o-mini"
-temperature: 0.3
-max_messages: 20
-allow_repeated_speaker: true
-max_selector_attempts: 3
-termination_keyword: "TERMINATE"
+description: "Left branch team for parallel execution testing - uses GPT-4o with low temperature for deterministic output"
 
 selector:
-  description: "Routes between left branch agents with context injection"
+  description: "Manages left branch analysis with deterministic approach"
   system_message: |
-    You are the selector for the Left Branch Team test. Your role is to coordinate between two agents:
+    You are the selector for the Left Branch Team - the deterministic analysis branch.
     
-    1. **left_agent_1**: Processes injected context from root team
-    2. **left_agent_2**: Finalizes left branch output
+    Your team uses GPT-4o with low temperature (0.1) for consistent, structured output.
     
-    Context from previous steps:
-    {step_summaries}
+    Coordinate between:
+    1. **Left_Analyst**: Primary structured analysis
+    2. **Left_Reviewer**: Quality review and finalization
     
-    Previous team result:
-    {agent_result}
-    
-    Start with left_agent_1, then route to left_agent_2.
+    Focus on methodical, step-by-step analysis.
 
 agents:
-  - name: left_agent_1
-    description: "Processes context from root team"
+  - name: Left_Analyst
+    description: "Primary analyst for structured, deterministic analysis"
     vector_memory: false
     system_message: |
-      You are left_agent_1 in the Left Branch Team.
+      You are the Left Analyst in a parallel execution test.
       
-      The context has been automatically injected via smart preprocessing.
-      Use this context to:
+      Your branch uses GPT-4o model with low temperature (0.1) for deterministic output.
+      Focus on structured, methodical analysis.
       
-      1. Say "Hello from Left Branch left_agent_1!"
-      2. Acknowledge what you received from the Root Team
-      3. Say "Processing left branch logic..."
-      4. State: "Passing to left_agent_2 for completion."
+      Task:
+      1. Provide structured analysis of parallel execution testing
+      2. Use numbered lists and clear organization
+      3. Focus on technical precision and consistency
+      4. Pass to Left_Reviewer for completion
 
-  - name: left_agent_2
-    description: "Finalizes left branch output"
+  - name: Left_Reviewer
+    description: "Reviews and finalizes left branch output"
     vector_memory: false
     system_message: |
-      You are left_agent_2 in the Left Branch Team.
+      You are the Left Reviewer in the deterministic branch.
       
-      1. Say "Hello from Left Branch left_agent_2!"
-      2. Confirm receipt from left_agent_1
-      3. Output: "# Left Branch Output\n\nLeft branch processed successfully.\nReceived context from Root Team.\nParallel processing with Right Branch.\n\nREADY FOR FINAL MERGE."
-      4. State: "TERMINATE"
+      Your role:
+      1. Review the Left Analyst's work for consistency
+      2. Create final markdown output with this structure:
+      
+      ```
+      # Left Branch Analysis (GPT-4o, Temp 0.1)
+      
+      ## Methodology
+      [Structured analysis approach]
+      
+      ## Findings
+      [Numbered findings list]
+      
+      ## Conclusion
+      Deterministic analysis complete. Ready for merge.
+      ```
+      
+      3. End with "TERMINATE" when complete

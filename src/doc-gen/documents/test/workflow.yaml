@@ -1,33 +1,45 @@
 workflow:
-  name: "Test Workflow - Enhanced Pipeline Testing"
-  description: "Simple test workflow to validate enhanced pipeline features including parallel processing, step files, and agent result injection"
+  name: "Test Parallel Execution from Start"
+  description: "Test workflow demonstrating true parallel execution from start with different models and temperatures"
+  
+  # Default configuration for all teams
+  model: "gpt-4o-mini"
+  temperature: 0.3
+  max_messages: 20
+  allow_repeated_speaker: false  # Force agent handoff - no repeated speakers
+  max_selector_attempts: 3
+  termination_keyword: "TERMINATE"
   
   teams:
-    - name: "Root_Team"
-      output_file: "root_output.md"
-      depends_on: null  # Root node - no dependencies
+    - name: "Left_Branch_Team"
+      output_file: "left_branch_output"
+      depends_on: null  # Independent root team - starts immediately
+      input_files: []
       step_files: []
       agent_result: null
-    
-    - name: "Left_Branch_Team" 
-      output_file: "left_output.md"
-      depends_on: "Root_Team"  # Single dependency (binary tree)
-      step_files:
-        - "root_output_steps.md"
-      agent_result: "root_output.md"
-    
+      # Team-specific configuration overrides
+      model: "gpt-4o"      # Use GPT-4o for left branch
+      temperature: 0.1     # Low temperature for more deterministic output
+
     - name: "Right_Branch_Team"
-      output_file: "right_output.md" 
-      depends_on: "Root_Team"  # Single dependency (binary tree) - parallel with Left_Branch
-      step_files:
-        - "root_output_steps.md"
-      agent_result: "root_output.md"
-    
-    - name: "Final_Team"
-      output_file: "final_output.md"
-      depends_on: "Left_Branch_Team"  # Could be either branch for final merge
-      step_files:
-        - "root_output_steps.md"
-        - "left_output_steps.md"
-        - "right_output_steps.md"
-      agent_result: "left_output.md"
+      output_file: "right_branch_output"
+      depends_on: null  # Independent root team - starts immediately (parallel to Left_Branch_Team)
+      input_files: []
+      step_files: []
+      agent_result: null
+      # Team-specific configuration overrides
+      model: "gpt-4o-mini"  # Use GPT-4o-mini for right branch
+      temperature: 0.7      # High temperature for more creative output
+
+    - name: "Merge_Team"
+      output_file: "merged_output"
+      depends_on: ["Left_Branch_Team", "Right_Branch_Team"]  # Depends on both branches
+      input_files:
+        - "left_branch_output.md"   # Needs left branch output
+        - "right_branch_output.md"  # Needs right branch output
+      step_files: []
+      agent_result: null
+      # Team-specific configuration overrides
+      model: "gpt-4o"      # Use GPT-4o for final merge
+      temperature: 0.5     # Balanced temperature for merging
+      max_messages: 30     # More messages for complex merge task

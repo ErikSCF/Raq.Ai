@@ -1,12 +1,6 @@
 name: "Process Analysis Team"
 description: "Meta-analysis team that examines the complete workflow steps and summarizes the process flow with agent decisions and changes"
 version: "1.0"
-model: "gpt-4o-mini"
-temperature: 0.3
-max_messages: 20
-allow_repeated_speaker: true
-max_selector_attempts: 3
-termination_keyword: "TERMINATE"
 
 selector:
   description: "Routes to appropriate analysis agent based on workflow data"

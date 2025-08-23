@@ -1,12 +1,6 @@
 name: "Document Assembly Team"
 description: "Aggregates epic discovery output into final RAQ document with complete story tables and professional formatting"
 version: "1.0"
-model: "gpt-4o-mini"
-temperature: 0.3
-max_messages: 30
-allow_repeated_speaker: true
-max_selector_attempts: 3
-termination_keyword: "TERMINATE"
 
 selector:
   description: "Coordinates document assembly team by selecting next team member"

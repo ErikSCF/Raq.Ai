@@ -47,6 +47,48 @@ class WorkflowManager:
         print(f"✓ Loaded workflow: {self.workflow_config['workflow']['name']}")
         print(f"✓ Teams: {[team['name'] for team in self.workflow_config['workflow']['teams']]}")
     
+    def get_team_config(self, team_name: str) -> Dict[str, Any]:
+        """
+        Get complete team configuration by loading team YAML and merging with workflow overrides.
+        """
+        # Load the team YAML file first to get the full structure
+        team_yaml_path = self.base_dir / "documents" / self.document_type_dir / f"{team_name}.yaml"
+        if not team_yaml_path.exists():
+            raise FileNotFoundError(f"Team YAML file not found: {team_yaml_path}")
+        
+        # Load the full team structure
+        team_config = self.load_yaml_file(team_yaml_path)
+        
+        # Get workflow configuration overrides
+        if self.workflow_config:
+            workflow = self.workflow_config['workflow']
+            
+            # Apply workflow defaults
+            workflow_defaults = {
+                'model': workflow.get('model', 'gpt-4o-mini'),
+                'temperature': workflow.get('temperature', 0.3),
+                'max_messages': workflow.get('max_messages', 50),
+                'allow_repeated_speaker': workflow.get('allow_repeated_speaker', True),
+                'max_selector_attempts': workflow.get('max_selector_attempts', 3),
+                'termination_keyword': workflow.get('termination_keyword', 'TERMINATE')
+            }
+            
+            # Apply workflow defaults to team config
+            for key, value in workflow_defaults.items():
+                if key not in team_config:
+                    team_config[key] = value
+            
+            # Find team-specific overrides in workflow teams section
+            for team in workflow.get('teams', []):
+                if team.get('name') == team_name:
+                    # Apply team-specific overrides
+                    for key, value in team.items():
+                        if key != 'name':  # Don't override the name
+                            team_config[key] = value
+                    break
+        
+        return team_config
+
     def load_yaml_file(self, file_path: Path) -> Dict[str, Any]:
         """Load YAML file and return parsed data."""
         with open(file_path, 'r', encoding='utf-8') as f:
@@ -140,15 +182,23 @@ class WorkflowManager:
                     # Root team - always ready
                     ready_teams.append(team_data)
                 else:
-                    # Check if dependency is completed
-                    dep_completed = False
-                    for completed_key in completed_teams:
-                        completed_team = dependency_tree[completed_key]
-                        if completed_team['name'] == depends_on:
-                            dep_completed = True
+                    # Handle both single dependency (string) and multiple dependencies (list)
+                    dependencies = depends_on if isinstance(depends_on, list) else [depends_on]
+                    
+                    # Check if all dependencies are completed
+                    all_deps_completed = True
+                    for dep_name in dependencies:
+                        dep_completed = False
+                        for completed_key in completed_teams:
+                            completed_team = dependency_tree[completed_key]
+                            if completed_team['name'] == dep_name:
+                                dep_completed = True
+                                break
+                        if not dep_completed:
+                            all_deps_completed = False
                             break
                     
-                    if dep_completed:
+                    if all_deps_completed:
                         ready_teams.append(team_data)
             
             if not ready_teams:

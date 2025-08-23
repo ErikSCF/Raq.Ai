@@ -1,12 +1,6 @@
 name: "Epic Discovery Team"
 description: "Specialized team for epic extraction and validation from project assets"
 version: "1.0"
-model: "gpt-4o-mini"
-temperature: 0.3
-max_messages: 50
-allow_repeated_speaker: true
-max_selector_attempts: 3
-termination_keyword: "TERMINATE"
 
 selector:
   description: "Coordinates epic discovery team by selecting next team member"

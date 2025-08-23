@@ -1,0 +1,20 @@
+workflow:
+  name: "Simple Two-Agent Test"
+  description: "Simple test workflow with one team containing two agents"
+  
+  # Default configuration for all teams
+  model: "gpt-4o-mini"
+  temperature: 0.5
+  max_messages: 10
+  allow_repeated_speaker: false  # Force agent handoff - no repeated speakers
+  max_selector_attempts: 3
+  termination_keyword: "TERMINATE"
+  
+  teams:
+    - name: "Simple_Team"
+      output_file: "simple_output"
+      depends_on: null  # Root team - starts immediately
+      input_files: []
+      step_files: []
+      agent_result: null
+      # Use default configuration (no overrides needed)
