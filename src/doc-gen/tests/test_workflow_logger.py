@@ -10,7 +10,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from workflow import WorkflowManager
-from observable import ObservableStore
+from workflow_orchestrator import WorkflowOrchestrator
 from team_runner import TeamRunnerFactory
 from logger import MemoryLoggerFactory, ConsoleLoggerFactory
 
@@ -62,12 +62,12 @@ class TestWorkflowManagerWithLogger(unittest.TestCase):
         wm = WorkflowManager(self.workflow_path, factory)
         
         # This should log to console
-        observable = ObservableStore()
+        orchestrator = WorkflowOrchestrator()
         wm.initialize(
             job_id="test_001",
             document_type="test",
             output_base_path="/tmp/test_output",
-            observable=observable,
+            orchestrator=orchestrator,
             team_runner_factory=TeamRunnerFactory(factory),
             assets=[]
         )
@@ -82,12 +82,12 @@ class TestWorkflowManagerWithLogger(unittest.TestCase):
         factory = MemoryLoggerFactory()
         wm = WorkflowManager(self.workflow_path, factory)
         
-        observable = ObservableStore()
+        orchestrator = WorkflowOrchestrator()
         wm.initialize(
             job_id="test_002",
             document_type="test",
             output_base_path="/tmp/test_output",
-            observable=observable,
+            orchestrator=orchestrator,
             team_runner_factory=TeamRunnerFactory(factory),
             assets=[]
         )

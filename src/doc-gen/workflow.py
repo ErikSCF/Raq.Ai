@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from team import Team
-from observable import ObservableStore
+from workflow_orchestrator import WorkflowOrchestrator, TaskStatus
 from asset_utils import AssetUtils
 from logger import LoggerFactory, get_default_factory, Logger
 
@@ -28,7 +28,7 @@ class WorkflowManager:
     def __init__(self, workflow_file_path: str, logger_factory: Optional[LoggerFactory] = None):
         """Initialize with path to workflow.yaml file and optional logger factory"""
         self.workflow_file_path = workflow_file_path
-        self.observable = None
+        self.orchestrator = None
         self.teams = []
         self.logger_factory = logger_factory or get_default_factory()
         self.logger = self.logger_factory.create_logger("workflow")
@@ -47,7 +47,7 @@ class WorkflowManager:
     def initialize(self, job_id: str,
                    document_type: str,
                    output_base_path: str,
-                   observable: ObservableStore,
+                   orchestrator: WorkflowOrchestrator,
                    team_runner_factory: TeamRunnerFactory,
                    assets: List[str]):
         """Initialize workflow with observable store, create job output path and
@@ -55,7 +55,7 @@ class WorkflowManager:
 
         All parameters are required to ensure proper workflow context setup.
         """
-        self.observable = observable
+        self.orchestrator = orchestrator
 
         # Create the output folder and prepare the asset vector memory
         try:
@@ -94,11 +94,11 @@ class WorkflowManager:
         # Create and initialize teams
         for team_config in team_configs:
             team = Team(team_config, self.logger_factory)
-            team.initialize(self.observable, team_runner_factory)
+            team.initialize(self.orchestrator, team_runner_factory)
             self.teams.append(team)
 
         self.logger.log(f"Workflow initialized with {len(self.teams)} teams")
-        return self.observable
+        return self.orchestrator
 
 
 if __name__ == "__main__":
@@ -116,22 +116,22 @@ if __name__ == "__main__":
         wm.logger.log("Workflow loaded successfully!")
         wm.logger.log(f"Teams: {[team_config.id for team_config in team_configs]}")
         
-        # Initialize workflow with observable store
+        # Initialize workflow with orchestrator
         wm.logger.log("Initializing workflow...")
-        observable = ObservableStore()
+        orchestrator = WorkflowOrchestrator()
         wm.initialize(
             job_id="example_job_001",
             document_type="RAQ", 
             output_base_path="./output",
-            observable=observable,
+            orchestrator=orchestrator,
             team_runner_factory=TeamRunnerFactory(wm.logger_factory),
             assets=["example_asset.pdf"]
         )
         
-        # Test the observable store
-        wm.logger.log("Testing observable store...")
-        observable.set('team_status', {'epic_discovery_001': 'running'})
-        observable.set('team_status', {'epic_discovery_001': 'completed', 'document_assembly_001': 'running'})
+        # Test the orchestrator
+        wm.logger.log("Testing orchestrator...")
+        orchestrator.set('epic_discovery_001', TaskStatus.STARTED)
+        orchestrator.set('epic_discovery_001', TaskStatus.COMPLETE)
             
     except Exception as e:
         print(f"Error: {e}")  # Keep one print for critical startup errors

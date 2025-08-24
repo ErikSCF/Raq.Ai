@@ -8,7 +8,7 @@ Represents a workflow team with complete configuration.
 from typing import Dict, List, Any, Optional
 from dataclasses import dataclass
 
-from observable import ObservableStore, TaskStatus
+from workflow_orchestrator import WorkflowOrchestrator, TaskStatus
 from team_runner import TeamRunnerFactory
 from logger import LoggerFactory, get_default_factory, Logger
 from logger import LoggerFactory, get_default_factory, Logger
@@ -54,9 +54,9 @@ class Team:
         self.logger_factory = logger_factory or get_default_factory()
         self.logger = self.logger_factory.create_logger("team")
     
-    def initialize(self, observable: ObservableStore, team_runner_factory: TeamRunnerFactory):
-        """Initialize team with observable store and subscribe to status changes"""
-        self.observable = observable
+    def initialize(self, orchestrator: WorkflowOrchestrator, team_runner_factory: TeamRunnerFactory):
+        """Initialize team with orchestrator and subscribe to status changes"""
+        self.orchestrator = orchestrator
         # Register team subscription using the team's declared dependency (if any).
         # `depends_on` is a team id this team depends on; register that so the
         # observable can trigger this team's start/stop when the dependency updates.
@@ -74,7 +74,7 @@ class Team:
             else:
                 dependencies = []
             
-            self._unsubscribe = self.observable.subscribe_team(self, dependencies)
+            self._unsubscribe = self.orchestrator.subscribe_team(self, dependencies)
             self.team_runner = team_runner_factory.create(self)
             self.team_runner.initialize()
         except Exception as e:

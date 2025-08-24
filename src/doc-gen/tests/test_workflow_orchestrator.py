@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """
-Tests for ObservableStore team-driven subscriptions
+Test WorkflowOrchestrator team subscription functionality
+
+Testing the declarative team subscription feature that drives workflow execution.
 """
 
 import time
@@ -12,7 +14,7 @@ import unittest
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from observable import ObservableStore, TaskStatus
+from workflow_orchestrator import WorkflowOrchestrator, TaskStatus
 
 
 class FakeTeam:
@@ -31,10 +33,10 @@ class FakeTeam:
         self.stop_event.set()
 
 
-class TestObservableTeamSubscriptions(unittest.TestCase):
+class TestWorkflowOrchestratorTeamSubscriptions(unittest.TestCase):
 
     def test_subscribe_team_ready_triggers_start_when_all_complete(self):
-        store = ObservableStore(max_workers=4)
+        store = WorkflowOrchestrator(max_workers=4)
         team = FakeTeam()
 
         # subscribe which depends on two agent ids
@@ -54,7 +56,7 @@ class TestObservableTeamSubscriptions(unittest.TestCase):
         self.assertEqual(set(team.started_with), {'a1', 'a2'})
 
     def test_subscribe_team_starts_immediately_with_no_dependencies(self):
-        store = ObservableStore(max_workers=4)
+        store = WorkflowOrchestrator(max_workers=4)
         team = FakeTeam()
 
         # subscribe with no dependencies - should start on first set call

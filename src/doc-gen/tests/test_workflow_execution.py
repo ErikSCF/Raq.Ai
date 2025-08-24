@@ -3,7 +3,19 @@
 
 This test demonstrates:
 - Full workflow initialization with test YAML
-- Observable triggering team starts based on dependencies
+- Observable         try:
+            wm = WorkflowManager(workflow_path, self.logger_factory)
+            orchestrator = WorkflowOrchestrator(logger_factory=self.logger_factory)
+            mock_factory = MockTeamRunnerFactory(self.logger_factory)
+            
+            wm.initialize(
+                job_id="test_successful",
+                document_type="test",
+                output_base_path=self.output_base_path,
+                orchestrator=orchestrator,
+                team_runner_factory=mock_factory,
+                assets=[]
+            )am starts based on dependencies
 - Teams using MockTeamRunner for realistic behavior
 - Proper logging throughout the process
 - Graceful completion or error handling
@@ -20,7 +32,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from workflow import WorkflowManager
-from observable import ObservableStore, TaskStatus
+from workflow_orchestrator import WorkflowOrchestrator, TaskStatus
 from tests.mock_team_runner import MockTeamRunnerFactory, MockTeamRunner
 from logger import MemoryLoggerFactory
 
@@ -75,14 +87,14 @@ class TestWorkflowExecution(unittest.TestCase):
         try:
             # Initialize workflow with mock team runner
             wm = WorkflowManager(workflow_path, self.logger_factory)
-            observable = ObservableStore(logger_factory=self.logger_factory)
+            orchestrator = WorkflowOrchestrator(logger_factory=self.logger_factory)
             mock_factory = MockTeamRunnerFactory(self.logger_factory)
             
             wm.initialize(
                 job_id="test_successful",
                 document_type="test",
                 output_base_path=self.output_base_path,
-                observable=observable,
+                orchestrator=orchestrator,
                 team_runner_factory=mock_factory,
                 assets=[]
             )
@@ -177,14 +189,14 @@ class TestWorkflowExecution(unittest.TestCase):
         
         try:
             wm = WorkflowManager(workflow_path, self.logger_factory)
-            observable = ObservableStore(logger_factory=self.logger_factory)
+            orchestrator = WorkflowOrchestrator(logger_factory=self.logger_factory)
             mock_factory = MockTeamRunnerFactory(self.logger_factory)
             
             wm.initialize(
                 job_id="test_failure",
                 document_type="test",
                 output_base_path=self.output_base_path,
-                observable=observable,
+                orchestrator=orchestrator,
                 team_runner_factory=mock_factory,
                 assets=[]
             )
@@ -228,14 +240,14 @@ class TestWorkflowExecution(unittest.TestCase):
         
         # Use the full test workflow file
         wm = WorkflowManager(str(self.test_workflow_path), self.logger_factory)
-        observable = ObservableStore(logger_factory=self.logger_factory)
+        orchestrator = WorkflowOrchestrator(logger_factory=self.logger_factory)
         mock_factory = MockTeamRunnerFactory(self.logger_factory)
         
         wm.initialize(
             job_id="test_complex",
             document_type="test",
             output_base_path=self.output_base_path,
-            observable=observable,
+            orchestrator=orchestrator,
             team_runner_factory=mock_factory,
             assets=[]
         )

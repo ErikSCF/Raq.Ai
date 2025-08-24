@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """
-Simple Observable Store
+Workflow Orchestrator
 
-A minimal key-value store with async callbacks for agent coordination.
+Orchestrates team execution based on dependencies and state management.
+A specialized observable store for workflow coordination.
 """
 
 import threading
@@ -42,34 +43,31 @@ class TaskStatusDict(Dict[str, TaskStatus]):
         return len(self) > 0 and all(status == TaskStatus.COMPLETE for status in self.values())
 
 
-class ObservableStore:
-    """Simple observable key-value store with team subscriptions
+class WorkflowOrchestrator:
+    """Orchestrates team execution based on dependencies and state.
 
-    Simplified: only supports starting a team once all its dependencies are
-    COMPLETE. No trigger modes, no one-shot options—subscriptions fire exactly
-    once when ready (or immediately if there are no dependencies).
+    Coordinates team execution by:
+    - Tracking team/task status (PENDING -> STARTED -> COMPLETE/ERROR)
+    - Managing dependency-based execution triggers
+    - Providing thread-safe state management
+    - Triggering team starts when dependencies are satisfied
     """
 
     def __init__(self, max_workers: int = 10, logger_factory: Optional[LoggerFactory] = None):
         self._data: TaskStatusDict = TaskStatusDict()
-        # legacy callback list removed - use team subscriptions only
         # Team subscriptions: list of dicts with keys: team, agent_ids (set), triggered
         self._team_subs: List[Dict[str, Any]] = []
         self._lock = threading.Lock()
-        self._executor = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="callback-")
+        self._executor = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="orchestrator-")
         self._logger_factory = logger_factory or get_default_factory()
-        self._logger = self._logger_factory.create_logger("observable")
-
-    # Legacy callback-style subscription removed. Use `subscribe_team` for
-    # team-driven orchestration. This keeps the store focused on declarative
-    # subscriptions handled by the workflow.
+        self._logger = self._logger_factory.create_logger("workflow_orchestrator")
 
     def subscribe_team(self, team: Any, agent_ids: List[str]) -> Callable[[], None]:
         """Subscribe a team with dependent agent ids.
 
         The team will have start(agent_ids) invoked exactly once when all
         provided agent_ids are COMPLETE. If agent_ids is empty, the team starts
-        immediately (as soon as the next set call occurs—typically right away).
+        immediately (as soon as the next set call occurs).
 
         Returns an unsubscribe function.
         """
@@ -103,10 +101,7 @@ class ObservableStore:
             self._data[key] = value
             # Create copies for evaluation outside the lock
             data_copy = self._data.copy()
-            callbacks_copy = []
             team_subs_copy = [dict(s) for s in self._team_subs]
-
-    # (No legacy callbacks) Team subscriptions drive actions
 
         # Evaluate team subscriptions quickly and submit long-running actions
         for sub in team_subs_copy:
@@ -127,8 +122,6 @@ class ObservableStore:
         if not agent_ids:
             return True
         return all(data.get(a, TaskStatus.PENDING) == TaskStatus.COMPLETE for a in agent_ids)
-
-    # legacy _safe_callback removed
 
     def _safe_team_action(self, sub: Dict[str, Any], action: str, arg: Any, data: TaskStatusDict):
         """Execute a team action (start/stop) safely in the executor."""
