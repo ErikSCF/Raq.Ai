@@ -32,6 +32,15 @@ class TeamConfig:
     allow_repeated_speaker: bool
     max_selector_attempts: int
     termination_keyword: str
+    
+    # Test-specific configuration (optional, for testing scenarios)
+    test_delay_seconds: Optional[float] = None  # How long to wait during run()
+    test_failure_mode: Optional[str] = None     # "exception", "timeout", "partial_failure", None
+    test_failure_delay: Optional[float] = None  # When during run() to trigger failure
+    test_failure_message: Optional[str] = None  # Custom failure message
+    test_success_probability: Optional[float] = None  # 0.0-1.0, chance of success (for flaky tests)
+    test_progress_steps: Optional[int] = None   # Number of progress updates to send
+    test_partial_output: Optional[bool] = None  # Whether to generate partial output before failing
 
 
 class Team:
@@ -57,11 +66,20 @@ class Team:
             # ObservableStore treats an empty dependency list as an immediate
             # trigger for the default "ready" action so teams with no
             # dependencies run in parallel.
-            self._unsubscribe = self.observable.subscribe_team(self, self.depends_on)
+            
+            # Convert depends_on string to list format expected by subscribe_team
+            if self.depends_on:
+                # Handle comma-separated dependencies
+                dependencies = [dep.strip() for dep in self.depends_on.split(',')]
+            else:
+                dependencies = []
+            
+            self._unsubscribe = self.observable.subscribe_team(self, dependencies)
             self.team_runner = team_runner_factory.create(self)
             self.team_runner.initialize()
-        except Exception:
-            # If observable doesn't support team subscriptions, ignore silently
+        except Exception as e:
+            # Log the exception instead of silently ignoring it
+            self.logger.error(f"Failed to initialize team {self.id}: {e}")
             self._unsubscribe = None
         self.logger.log(f"Team '{self.id}' (template: {self.template}) registered with observable store")
 

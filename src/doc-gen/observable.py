@@ -88,6 +88,11 @@ class ObservableStore:
 
         return unsubscribe
 
+    def get(self, key: str) -> TaskStatus:
+        """Get the status of a task/team."""
+        with self._lock:
+            return self._data.get(key, TaskStatus.PENDING)
+    
     def set(self, key: str, value: TaskStatus):
         """Set a key-value pair and notify subscribers asynchronously.
 

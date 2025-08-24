@@ -124,7 +124,7 @@ if __name__ == "__main__":
             document_type="RAQ", 
             output_base_path="./output",
             observable=observable,
-            team_runner_factory=TeamRunnerFactory(),
+            team_runner_factory=TeamRunnerFactory(wm.logger_factory),
             assets=["example_asset.pdf"]
         )
         

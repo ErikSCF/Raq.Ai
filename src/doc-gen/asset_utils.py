@@ -76,7 +76,15 @@ class AssetUtils:
                 max_messages=normalized_team.get('max_messages'),
                 allow_repeated_speaker=normalized_team.get('allow_repeated_speaker'),
                 max_selector_attempts=normalized_team.get('max_selector_attempts'),
-                termination_keyword=normalized_team.get('termination_keyword')
+                termination_keyword=normalized_team.get('termination_keyword'),
+                # Test-specific configuration
+                test_delay_seconds=normalized_team.get('test_delay_seconds'),
+                test_failure_mode=normalized_team.get('test_failure_mode'),
+                test_failure_delay=normalized_team.get('test_failure_delay'),
+                test_failure_message=normalized_team.get('test_failure_message'),
+                test_success_probability=normalized_team.get('test_success_probability'),
+                test_progress_steps=normalized_team.get('test_progress_steps'),
+                test_partial_output=normalized_team.get('test_partial_output')
             )
             
             team_configs.append(team_config)
@@ -136,7 +144,15 @@ class AssetUtils:
                 max_messages=normalized_team.get('max_messages'),
                 allow_repeated_speaker=normalized_team.get('allow_repeated_speaker'),
                 max_selector_attempts=normalized_team.get('max_selector_attempts'),
-                termination_keyword=normalized_team.get('termination_keyword')
+                termination_keyword=normalized_team.get('termination_keyword'),
+                # Test-specific configuration
+                test_delay_seconds=normalized_team.get('test_delay_seconds'),
+                test_failure_mode=normalized_team.get('test_failure_mode'),
+                test_failure_delay=normalized_team.get('test_failure_delay'),
+                test_failure_message=normalized_team.get('test_failure_message'),
+                test_success_probability=normalized_team.get('test_success_probability'),
+                test_progress_steps=normalized_team.get('test_progress_steps'),
+                test_partial_output=normalized_team.get('test_partial_output')
             )
             
             team_configs.append(team_config)

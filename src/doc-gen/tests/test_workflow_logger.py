@@ -68,7 +68,7 @@ class TestWorkflowManagerWithLogger(unittest.TestCase):
             document_type="test",
             output_base_path="/tmp/test_output",
             observable=observable,
-            team_runner_factory=TeamRunnerFactory(),
+            team_runner_factory=TeamRunnerFactory(factory),
             assets=[]
         )
         
@@ -88,7 +88,7 @@ class TestWorkflowManagerWithLogger(unittest.TestCase):
             document_type="test",
             output_base_path="/tmp/test_output",
             observable=observable,
-            team_runner_factory=TeamRunnerFactory(),
+            team_runner_factory=TeamRunnerFactory(factory),
             assets=[]
         )
         
@@ -96,7 +96,8 @@ class TestWorkflowManagerWithLogger(unittest.TestCase):
         self.assertEqual(len(wm.teams), 2)
         
         # Check logged messages
-        entries = factory.get_entries()
+        shared_logger = factory.create_logger()
+        entries = shared_logger.entries()
         messages = [entry.message for entry in entries]
         
         # Should have logged job folder creation
@@ -127,11 +128,12 @@ class TestWorkflowManagerWithLogger(unittest.TestCase):
         # Test logging an error directly
         wm.logger.error("Test error message")
         
-        entries = factory.get_entries()
+        shared_logger = factory.create_logger()
+        entries = shared_logger.entries()
         error_entries = [e for e in entries if e.is_error]
         self.assertEqual(len(error_entries), 1)
         self.assertEqual(error_entries[0].message, "Test error message")
-        self.assertTrue(factory.has_errors())
+        self.assertTrue(shared_logger.has_errors())
 
 
 if __name__ == "__main__":
