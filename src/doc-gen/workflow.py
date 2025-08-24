@@ -165,6 +165,10 @@ class WorkflowManager:
         
         # Create and initialize teams
         for team_config in team_configs:
+            # Set runtime context
+            team_config.job_folder = str(self.job_folder)
+            team_config.document_type = self.document_type
+            
             team = Team(team_config, self.logger_factory)
             team.initialize(self.orchestrator, team_runner_factory, memory)
             self.teams.append(team)

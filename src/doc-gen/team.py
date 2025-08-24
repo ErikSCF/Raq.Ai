@@ -33,6 +33,10 @@ class TeamConfig:
     max_selector_attempts: int
     termination_keyword: str
     
+    # Runtime context (added by workflow manager)
+    job_folder: Optional[str] = None
+    document_type: Optional[str] = None
+    
     # Test-specific configuration (optional, for testing scenarios)
     test_delay_seconds: Optional[float] = None  # How long to wait during run()
     test_failure_mode: Optional[str] = None     # "exception", "timeout", "partial_failure", None
