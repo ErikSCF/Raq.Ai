@@ -14,7 +14,8 @@ from observable import ObservableStore
 @dataclass
 class TeamConfig:
     """Complete team configuration with all properties"""
-    name: str
+    id: str
+    template: str
     output_file: str
     depends_on: Optional[str]
     input_files: List[str]
@@ -43,19 +44,24 @@ class Team:
         self.observable = observable
         # Subscribe to team status changes
         current_state = self.observable.subscribe(self._on_status_change)
-        print(f"Team '{self.name}' subscribed to observable store")
+        print(f"Team '{self.id}' (template: {self.template}) subscribed to observable store")
     
     def _on_status_change(self, data: Dict[str, Any]):
         """Handle status changes from the observable store"""
         # Teams can react to status changes here
-        if 'team_status' in data and self.name in data['team_status']:
-            team_status = data['team_status'][self.name]
-            print(f"Team '{self.name}' status changed to: {team_status}")
+        if 'team_status' in data and self.id in data['team_status']:
+            team_status = data['team_status'][self.id]
+            print(f"Team '{self.id}' status changed to: {team_status}")
     
     @property
-    def name(self) -> str:
-        """Get team name"""
-        return self.config.name
+    def id(self) -> str:
+        """Get team id"""
+        return self.config.id
+    
+    @property
+    def template(self) -> str:
+        """Get team template"""
+        return self.config.template
     
     @property
     def output_file(self) -> str:
@@ -115,7 +121,7 @@ class Team:
     
     def __str__(self) -> str:
         """String representation of the team"""
-        return f"Team(name='{self.name}', output_file='{self.output_file}', depends_on={self.depends_on})"
+        return f"Team(id='{self.id}', template='{self.template}', output_file='{self.output_file}', depends_on={self.depends_on})"
     
     def __repr__(self) -> str:
         """Detailed representation of the team"""

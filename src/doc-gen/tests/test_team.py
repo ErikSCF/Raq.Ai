@@ -20,9 +20,10 @@ class TestTeam(unittest.TestCase):
     def setUp(self):
         """Set up test fixtures"""
         self.config = TeamConfig(
-            name='TestTeam',
+            id='test_team_001',
+            template='TestTeam.yaml',
             output_file='test.md',
-            depends_on='OtherTeam',
+            depends_on='other_team_001',
             input_files=['input.txt'],
             step_files=['steps.md'],
             agent_result='result',
@@ -42,9 +43,10 @@ class TestTeam(unittest.TestCase):
     
     def test_workflow_properties(self):
         """Test workflow-related properties"""
-        self.assertEqual(self.team.name, 'TestTeam')
+        self.assertEqual(self.team.id, 'test_team_001')
+        self.assertEqual(self.team.template, 'TestTeam.yaml')
         self.assertEqual(self.team.output_file, 'test.md')
-        self.assertEqual(self.team.depends_on, 'OtherTeam')
+        self.assertEqual(self.team.depends_on, 'other_team_001')
         self.assertEqual(self.team.input_files, ['input.txt'])
         self.assertEqual(self.team.step_files, ['steps.md'])
         self.assertEqual(self.team.agent_result, 'result')
@@ -61,9 +63,10 @@ class TestTeam(unittest.TestCase):
     def test_string_representation(self):
         """Test string representations"""
         str_repr = str(self.team)
-        self.assertIn('TestTeam', str_repr)
+        self.assertIn('test_team_001', str_repr)
+        self.assertIn('TestTeam.yaml', str_repr)
         self.assertIn('test.md', str_repr)
-        self.assertIn('OtherTeam', str_repr)
+        self.assertIn('other_team_001', str_repr)
         
         repr_str = repr(self.team)
         self.assertIn('Team(config=', repr_str)
@@ -71,7 +74,8 @@ class TestTeam(unittest.TestCase):
     def test_team_with_minimal_config(self):
         """Test team with minimal configuration"""
         minimal_config = TeamConfig(
-            name='MinimalTeam',
+            id='minimal_team_001',
+            template='MinimalTeam.yaml',
             output_file='minimal.md',
             depends_on=None,
             input_files=[],
@@ -87,7 +91,8 @@ class TestTeam(unittest.TestCase):
         
         minimal_team = Team(minimal_config)
         
-        self.assertEqual(minimal_team.name, 'MinimalTeam')
+        self.assertEqual(minimal_team.id, 'minimal_team_001')
+        self.assertEqual(minimal_team.template, 'MinimalTeam.yaml')
         self.assertEqual(minimal_team.depends_on, None)
         self.assertEqual(minimal_team.input_files, [])
         self.assertEqual(minimal_team.step_files, [])

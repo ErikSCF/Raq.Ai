@@ -11,7 +11,8 @@ workflow:
   termination_keyword: "TERMINATE"
   
   teams:
-    - name: "Simple_Team"
+    - id: "simple_team_001"
+      template: "Simple_Team.yaml"
       output_file: "simple_output"
       depends_on: null  # Root team - starts immediately
       input_files: []

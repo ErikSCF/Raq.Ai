@@ -15,7 +15,7 @@ from unittest.mock import Mock
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from observable import ObservableStore
+from observable import ObservableStore, TaskStatus
 
 
 class TestObservableStore(unittest.TestCase):
@@ -29,19 +29,17 @@ class TestObservableStore(unittest.TestCase):
         callback_mock = Mock()
         initial_state = self.store.subscribe(callback_mock)
         
-        # Initial state should be empty
+        # Should start empty
         self.assertEqual(initial_state, {})
         
-        # Set a value - should trigger callback
-        self.store.set("key1", "value1")
+        # Set a value
+        self.store.set("key1", TaskStatus.STARTED)
         
-        # Give time for async callback
+        # Give async callback time to execute
         time.sleep(0.1)
         
-        # Callback should have been called with the data
-        callback_mock.assert_called_once()
-        call_args = callback_mock.call_args[0][0]
-        self.assertEqual(call_args["key1"], "value1")
+        # Check callback was called with the data
+        callback_mock.assert_called_with({"key1": TaskStatus.STARTED})
     
     def test_multiple_subscribers(self):
         """Test multiple subscribers get notified"""
@@ -53,7 +51,7 @@ class TestObservableStore(unittest.TestCase):
         self.store.subscribe(callback2)
         
         # Set a value
-        self.store.set("test", "data")
+        self.store.set("test", TaskStatus.PENDING)
         
         # Give time for async callbacks
         time.sleep(0.1)
@@ -66,12 +64,12 @@ class TestObservableStore(unittest.TestCase):
         call_args1 = callback1.call_args[0][0]
         call_args2 = callback2.call_args[0][0]
         self.assertEqual(call_args1, call_args2)
-        self.assertEqual(call_args1["test"], "data")
+        self.assertEqual(call_args1["test"], TaskStatus.PENDING)
     
     def test_subscribe_returns_current_state(self):
         """Test that subscribe returns current state immediately"""
         # Set some initial data
-        self.store.set("existing", "data")
+        self.store.set("existing", TaskStatus.STARTED)
         
         # Give time for internal processing
         time.sleep(0.05)
@@ -80,7 +78,8 @@ class TestObservableStore(unittest.TestCase):
         callback_mock = Mock()
         current_state = self.store.subscribe(callback_mock)
         
-        self.assertEqual(current_state["existing"], "data")
+        # Should get current state back
+        self.assertEqual(current_state, {"existing": TaskStatus.STARTED})
     
     def test_multiple_values(self):
         """Test setting multiple values"""
@@ -88,9 +87,9 @@ class TestObservableStore(unittest.TestCase):
         self.store.subscribe(callback_mock)
         
         # Set multiple values
-        self.store.set("key1", "value1")
-        self.store.set("key2", "value2")
-        self.store.set("key3", {"nested": "object"})
+        self.store.set("key1", TaskStatus.STARTED)
+        self.store.set("key2", TaskStatus.PENDING)
+        self.store.set("key3", TaskStatus.COMPLETE)
         
         # Give time for async callbacks
         time.sleep(0.1)
@@ -100,9 +99,9 @@ class TestObservableStore(unittest.TestCase):
         
         # Last call should have all data
         last_call_args = callback_mock.call_args[0][0]
-        self.assertEqual(last_call_args["key1"], "value1")
-        self.assertEqual(last_call_args["key2"], "value2")
-        self.assertEqual(last_call_args["key3"]["nested"], "object")
+        self.assertEqual(last_call_args["key1"], TaskStatus.STARTED)
+        self.assertEqual(last_call_args["key2"], TaskStatus.PENDING)
+        self.assertEqual(last_call_args["key3"], TaskStatus.COMPLETE)
     
     def test_update_existing_key(self):
         """Test updating an existing key"""
@@ -110,10 +109,10 @@ class TestObservableStore(unittest.TestCase):
         self.store.subscribe(callback_mock)
         
         # Set initial value
-        self.store.set("key", "initial")
+        self.store.set("key", TaskStatus.PENDING)
         
         # Update the value
-        self.store.set("key", "updated")
+        self.store.set("key", TaskStatus.COMPLETE)
         
         # Give time for async callbacks
         time.sleep(0.1)
@@ -123,7 +122,7 @@ class TestObservableStore(unittest.TestCase):
         
         # Last call should have updated value
         last_call_args = callback_mock.call_args[0][0]
-        self.assertEqual(last_call_args["key"], "updated")
+        self.assertEqual(last_call_args["key"], TaskStatus.COMPLETE)
     
     def test_callback_failure_removal(self):
         """Test that failed callbacks are automatically removed"""
@@ -138,7 +137,7 @@ class TestObservableStore(unittest.TestCase):
         self.store.subscribe(working_callback)
         
         # Set a value - should trigger both callbacks
-        self.store.set("test", "data")
+        self.store.set("test", TaskStatus.ERROR)
         
         # Give time for async callbacks and cleanup
         time.sleep(0.2)
@@ -148,7 +147,7 @@ class TestObservableStore(unittest.TestCase):
         
         # Reset the working callback and set another value
         working_callback.reset_mock()
-        self.store.set("test2", "data2")
+        self.store.set("test2", TaskStatus.COMPLETE)
         
         # Give time for async callbacks
         time.sleep(0.1)
@@ -166,8 +165,10 @@ class TestObservableStore(unittest.TestCase):
         self.store.subscribe(callback)
         
         def set_values(start_index):
+            statuses = [TaskStatus.STARTED, TaskStatus.PENDING, TaskStatus.COMPLETE, TaskStatus.ERROR]
             for i in range(start_index, start_index + 5):
-                self.store.set(f"key_{i}", f"value_{i}")
+                status = statuses[i % len(statuses)]
+                self.store.set(f"key_{i}", status)
                 time.sleep(0.01)
         
         # Run operations in parallel
@@ -188,9 +189,11 @@ class TestObservableStore(unittest.TestCase):
         
         # Last result should have all 10 keys
         last_result = results[-1]
+        statuses = [TaskStatus.STARTED, TaskStatus.PENDING, TaskStatus.COMPLETE, TaskStatus.ERROR]
         for i in range(10):
             self.assertIn(f"key_{i}", last_result)
-            self.assertEqual(last_result[f"key_{i}"], f"value_{i}")
+            expected_status = statuses[i % len(statuses)]
+            self.assertEqual(last_result[f"key_{i}"], expected_status)
 
 
 class TestObservableStoreUsagePatterns(unittest.TestCase):
@@ -204,47 +207,51 @@ class TestObservableStoreUsagePatterns(unittest.TestCase):
         status_changes = []
         
         def track_status(data):
-            if "agent_status" in data:
-                status_changes.append(data["agent_status"].copy())
+            status_changes.append(data.copy())
         
         # Subscribe to changes
         self.store.subscribe(track_status)
         
         # Simulate agent lifecycle
-        self.store.set("agent_status", {"agent1": "pending"})
-        self.store.set("agent_status", {"agent1": "running", "agent2": "pending"})
-        self.store.set("agent_status", {"agent1": "completed", "agent2": "running"})
-        self.store.set("agent_status", {"agent1": "completed", "agent2": "completed"})
+        self.store.set("agent1", TaskStatus.PENDING)
+        self.store.set("agent2", TaskStatus.PENDING)
+        self.store.set("agent1", TaskStatus.STARTED)
+        self.store.set("agent1", TaskStatus.COMPLETE)
+        self.store.set("agent2", TaskStatus.STARTED)
+        self.store.set("agent2", TaskStatus.COMPLETE)
         
         # Give time for callbacks
         time.sleep(0.1)
         
         # Should have tracked all status changes
-        self.assertEqual(len(status_changes), 4)
-        self.assertEqual(status_changes[0]["agent1"], "pending")
-        self.assertEqual(status_changes[-1]["agent2"], "completed")
+        self.assertEqual(len(status_changes), 6)
+        self.assertEqual(status_changes[0]["agent1"], TaskStatus.PENDING)
+        self.assertEqual(status_changes[-1]["agent2"], TaskStatus.COMPLETE)
+        self.assertEqual(status_changes[-1]["agent1"], TaskStatus.COMPLETE)
     
     def test_workflow_progress_tracking(self):
-        """Test using store for workflow progress"""
+        """Test using store for workflow progress tracking"""
         progress_updates = []
         
         def track_progress(data):
-            if "workflow_progress" in data:
-                progress_updates.append(data["workflow_progress"])
+            progress_updates.append(data.copy())
         
         self.store.subscribe(track_progress)
         
-        # Simulate workflow progress
-        self.store.set("workflow_progress", {"completed_steps": 0, "total_steps": 5})
-        self.store.set("workflow_progress", {"completed_steps": 2, "total_steps": 5})
-        self.store.set("workflow_progress", {"completed_steps": 5, "total_steps": 5})
+        # Simulate workflow progress with step statuses
+        self.store.set("step1", TaskStatus.COMPLETE)
+        self.store.set("step2", TaskStatus.COMPLETE)  
+        self.store.set("step3", TaskStatus.STARTED)
+        self.store.set("step3", TaskStatus.COMPLETE)
+        self.store.set("step4", TaskStatus.ERROR)
         
         # Give time for callbacks
         time.sleep(0.1)
         
-        self.assertEqual(len(progress_updates), 3)
-        self.assertEqual(progress_updates[0]["completed_steps"], 0)
-        self.assertEqual(progress_updates[-1]["completed_steps"], 5)
+        self.assertEqual(len(progress_updates), 5)
+        self.assertEqual(progress_updates[0]["step1"], TaskStatus.COMPLETE)
+        self.assertEqual(progress_updates[-1]["step4"], TaskStatus.ERROR)
+        self.assertEqual(progress_updates[-1]["step3"], TaskStatus.COMPLETE)
 
 
 if __name__ == "__main__":

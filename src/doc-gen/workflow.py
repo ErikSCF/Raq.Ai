@@ -56,7 +56,7 @@ class WorkflowManager:
     def _create_team_configs(self):
         """Create complete team configurations with defaults + overrides"""
         workflow_defaults = self._extract_workflow_defaults()
-        
+
         if 'teams' not in self.workflow_config:
             raise ValueError("Invalid workflow file: missing 'teams' section")
         
@@ -99,13 +99,16 @@ class WorkflowManager:
         config.setdefault('depends_on', None)
         
         # Validate required fields
-        if 'name' not in config:
-            raise ValueError("Team configuration missing required 'name' field")
+        if 'id' not in config:
+            raise ValueError("Team configuration missing required 'id' field")
+        if 'template' not in config:
+            raise ValueError(f"Team '{config.get('id', 'unknown')}' missing required 'template' field")
         if 'output_file' not in config:
-            raise ValueError(f"Team '{config['name']}' missing required 'output_file' field")
+            raise ValueError(f"Team '{config.get('id', 'unknown')}' missing required 'output_file' field")
         
         return TeamConfig(
-            name=config['name'],
+            id=config['id'],
+            template=config['template'],
             output_file=config['output_file'],
             depends_on=config['depends_on'],
             input_files=config['input_files'],
@@ -123,12 +126,12 @@ class WorkflowManager:
         """Get all team configurations"""
         return self.teams.copy()
     
-    def get_team_config(self, team_name: str) -> Team:
+    def get_team_config(self, team_id: str) -> Team:
         """Get configuration for a specific team"""
         for team in self.teams:
-            if team.name == team_name:
+            if team.id == team_id:
                 return team
-        raise ValueError(f"Team not found: {team_name}")
+        raise ValueError(f"Team not found: {team_id}")
     
     def get_workflow_info(self) -> Dict[str, Any]:
         """Get general workflow information"""
@@ -143,19 +146,19 @@ class WorkflowManager:
         # Build dependency graph
         team_deps = {}
         for team in self.teams:
-            team_deps[team.name] = team.depends_on
+            team_deps[team.id] = team.depends_on
         
         # Topological sort to get execution order
         levels = []
-        remaining_teams = set(team.name for team in self.teams)
+        remaining_teams = set(team.id for team in self.teams)
         
         while remaining_teams:
             # Find teams with no remaining dependencies
             ready_teams = []
-            for team_name in remaining_teams:
-                dep = team_deps[team_name]
+            for team_id in remaining_teams:
+                dep = team_deps[team_id]
                 if dep is None or dep not in remaining_teams:
-                    ready_teams.append(team_name)
+                    ready_teams.append(team_id)
             
             if not ready_teams:
                 raise ValueError("Circular dependency detected in workflow")
@@ -176,16 +179,16 @@ class WorkflowManager:
             issues.append(str(e))
         
         # Check for missing dependencies
-        team_names = {team.name for team in self.teams}
+        team_ids = {team.id for team in self.teams}
         for team in self.teams:
-            if team.depends_on and team.depends_on not in team_names:
-                issues.append(f"Team '{team.name}' depends on unknown team '{team.depends_on}'")
+            if team.depends_on and team.depends_on not in team_ids:
+                issues.append(f"Team '{team.id}' depends on unknown team '{team.depends_on}'")
         
-        # Check for duplicate team names
-        names = [team.name for team in self.teams]
-        duplicates = set([name for name in names if names.count(name) > 1])
+        # Check for duplicate team ids
+        ids = [team.id for team in self.teams]
+        duplicates = set([team_id for team_id in ids if ids.count(team_id) > 1])
         for duplicate in duplicates:
-            issues.append(f"Duplicate team name: '{duplicate}'")
+            issues.append(f"Duplicate team id: '{duplicate}'")
         
         return issues
 
@@ -209,7 +212,7 @@ if __name__ == "__main__":
         wm = load_workflow(workflow_path)
         print("Workflow loaded successfully!")
         print(f"Workflow: {wm.get_workflow_info()}")
-        print(f"Teams: {[team.name for team in wm.get_teams()]}")
+        print(f"Teams: {[team.id for team in wm.get_teams()]}")
         print(f"Execution order: {wm.get_dependency_order()}")
         
         # Validate
@@ -227,8 +230,8 @@ if __name__ == "__main__":
         
         # Test the observable store
         print("\nTesting observable store...")
-        observable.set('team_status', {'Epic_Discovery_Team': 'running'})
-        observable.set('team_status', {'Epic_Discovery_Team': 'completed', 'Document_Assembly_Team': 'running'})
+        observable.set('team_status', {'epic_discovery_001': 'running'})
+        observable.set('team_status', {'epic_discovery_001': 'completed', 'document_assembly_001': 'running'})
             
     except Exception as e:
         print(f"Error: {e}")

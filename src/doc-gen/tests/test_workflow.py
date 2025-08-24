@@ -35,7 +35,8 @@ class TestWorkflowManager(unittest.TestCase):
                 'termination_keyword': 'TERMINATE',
                 'teams': [
                     {
-                        'name': 'Team1',
+                        'id': 'team1_001',
+                        'template': 'Team1.yaml',
                         'output_file': 'output1.md',
                         'depends_on': None,
                         'input_files': ['input1.txt'],
@@ -43,9 +44,10 @@ class TestWorkflowManager(unittest.TestCase):
                         'agent_result': None
                     },
                     {
-                        'name': 'Team2',
+                        'id': 'team2_001',
+                        'template': 'Team2.yaml',
                         'output_file': 'output2.md',
-                        'depends_on': 'Team1',
+                        'depends_on': 'team1_001',
                         'input_files': ['output1.md'],
                         'step_files': ['output1.steps.md'],
                         'agent_result': None,
@@ -78,8 +80,8 @@ class TestWorkflowManager(unittest.TestCase):
             # Check teams
             teams = wm.get_teams()
             self.assertEqual(len(teams), 2)
-            self.assertEqual(teams[0].name, 'Team1')
-            self.assertEqual(teams[1].name, 'Team2')
+            self.assertEqual(teams[0].id, 'team1_001')
+            self.assertEqual(teams[1].id, 'team2_001')
             
         finally:
             os.unlink(temp_file)
@@ -91,8 +93,8 @@ class TestWorkflowManager(unittest.TestCase):
         try:
             wm = WorkflowManager(temp_file)
             
-            team1 = wm.get_team_config('Team1')
-            team2 = wm.get_team_config('Team2')
+            team1 = wm.get_team_config('team1_001')
+            team2 = wm.get_team_config('team2_001')
             
             # Team1 should use defaults
             self.assertEqual(team1.model, 'gpt-4o-mini')
@@ -116,15 +118,17 @@ class TestWorkflowManager(unittest.TestCase):
         try:
             wm = WorkflowManager(temp_file)
             
-            team1 = wm.get_team_config('Team1')
-            self.assertEqual(team1.name, 'Team1')
+            team1 = wm.get_team_config('team1_001')
+            self.assertEqual(team1.id, 'team1_001')
+            self.assertEqual(team1.template, 'Team1.yaml')
             self.assertEqual(team1.output_file, 'output1.md')
             self.assertEqual(team1.depends_on, None)
             self.assertEqual(team1.input_files, ['input1.txt'])
             
-            team2 = wm.get_team_config('Team2')
-            self.assertEqual(team2.name, 'Team2')
-            self.assertEqual(team2.depends_on, 'Team1')
+            team2 = wm.get_team_config('team2_001')
+            self.assertEqual(team2.id, 'team2_001')
+            self.assertEqual(team2.template, 'Team2.yaml')
+            self.assertEqual(team2.depends_on, 'team1_001')
             
         finally:
             os.unlink(temp_file)
@@ -137,7 +141,7 @@ class TestWorkflowManager(unittest.TestCase):
             wm = WorkflowManager(temp_file)
             
             with self.assertRaises(ValueError) as context:
-                wm.get_team_config('NonexistentTeam')
+                wm.get_team_config('nonexistent_team_001')
             
             self.assertIn('Team not found', str(context.exception))
             
@@ -153,10 +157,10 @@ class TestWorkflowManager(unittest.TestCase):
             
             order = wm.get_dependency_order()
             
-            # Should have 2 levels: [Team1], [Team2]
+            # Should have 2 levels: [team1_001], [team2_001]
             self.assertEqual(len(order), 2)
-            self.assertEqual(order[0], ['Team1'])
-            self.assertEqual(order[1], ['Team2'])
+            self.assertEqual(order[0], ['team1_001'])
+            self.assertEqual(order[1], ['team2_001'])
             
         finally:
             os.unlink(temp_file)
@@ -173,10 +177,10 @@ class TestWorkflowManager(unittest.TestCase):
                 'max_selector_attempts': 3,
                 'termination_keyword': 'TERMINATE',
                 'teams': [
-                    {'name': 'Root', 'output_file': 'root.md', 'depends_on': None},
-                    {'name': 'Branch1', 'output_file': 'branch1.md', 'depends_on': 'Root'},
-                    {'name': 'Branch2', 'output_file': 'branch2.md', 'depends_on': 'Root'},
-                    {'name': 'Merge', 'output_file': 'merge.md', 'depends_on': 'Branch1'}
+                    {'id': 'root_001', 'template': 'Root.yaml', 'output_file': 'root.md', 'depends_on': None},
+                    {'id': 'branch1_001', 'template': 'Branch1.yaml', 'output_file': 'branch1.md', 'depends_on': 'root_001'},
+                    {'id': 'branch2_001', 'template': 'Branch2.yaml', 'output_file': 'branch2.md', 'depends_on': 'root_001'},
+                    {'id': 'merge_001', 'template': 'Merge.yaml', 'output_file': 'merge.md', 'depends_on': 'branch1_001'}
                 ]
             }
         }
@@ -188,13 +192,13 @@ class TestWorkflowManager(unittest.TestCase):
             
             order = wm.get_dependency_order()
             
-            # Should have 3 levels: [Root], [Branch1, Branch2], [Merge]
+            # Should have 3 levels: [root_001], [branch1_001, branch2_001], [merge_001]
             self.assertEqual(len(order), 3)
-            self.assertEqual(order[0], ['Root'])
-            self.assertIn('Branch1', order[1])
-            self.assertIn('Branch2', order[1])
+            self.assertEqual(order[0], ['root_001'])
+            self.assertIn('branch1_001', order[1])
+            self.assertIn('branch2_001', order[1])
             self.assertEqual(len(order[1]), 2)  # Both branches in same level
-            self.assertEqual(order[2], ['Merge'])
+            self.assertEqual(order[2], ['merge_001'])
             
         finally:
             os.unlink(temp_file)
@@ -211,8 +215,8 @@ class TestWorkflowManager(unittest.TestCase):
                 'max_selector_attempts': 3,
                 'termination_keyword': 'TERMINATE',
                 'teams': [
-                    {'name': 'Team1', 'output_file': 'output1.md', 'depends_on': None},
-                    {'name': 'Team1', 'output_file': 'output2.md', 'depends_on': None}
+                    {'id': 'team1_001', 'template': 'Team1.yaml', 'output_file': 'output1.md', 'depends_on': None},
+                    {'id': 'team1_001', 'template': 'Team1.yaml', 'output_file': 'output2.md', 'depends_on': None}
                 ]
             }
         }
@@ -224,7 +228,7 @@ class TestWorkflowManager(unittest.TestCase):
             
             issues = wm.validate_workflow()
             
-            self.assertTrue(any('Duplicate team name' in issue for issue in issues))
+            self.assertTrue(any('Duplicate team id' in issue for issue in issues))
             
         finally:
             os.unlink(temp_file)
@@ -241,7 +245,7 @@ class TestWorkflowManager(unittest.TestCase):
                 'max_selector_attempts': 3,
                 'termination_keyword': 'TERMINATE',
                 'teams': [
-                    {'name': 'Team1', 'output_file': 'output1.md', 'depends_on': 'NonexistentTeam'}
+                    {'id': 'team1_001', 'template': 'Team1.yaml', 'output_file': 'output1.md', 'depends_on': 'nonexistent_team_001'}
                 ]
             }
         }
@@ -270,8 +274,8 @@ class TestWorkflowManager(unittest.TestCase):
                 'max_selector_attempts': 3,
                 'termination_keyword': 'TERMINATE',
                 'teams': [
-                    {'name': 'Team1', 'output_file': 'output1.md', 'depends_on': 'Team2'},
-                    {'name': 'Team2', 'output_file': 'output2.md', 'depends_on': 'Team1'}
+                    {'id': 'team1_001', 'template': 'Team1.yaml', 'output_file': 'output1.md', 'depends_on': 'team2_001'},
+                    {'id': 'team2_001', 'template': 'Team2.yaml', 'output_file': 'output2.md', 'depends_on': 'team1_001'}
                 ]
             }
         }
@@ -346,7 +350,7 @@ class TestWorkflowManager(unittest.TestCase):
                 'max_selector_attempts': 3,
                 'termination_keyword': 'TERMINATE',
                 'teams': [
-                    {'output_file': 'output.md'}  # Missing 'name'
+                    {'template': 'TestTeam.yaml', 'output_file': 'output.md'}  # Missing 'id'
                 ]
             }
         }
@@ -357,7 +361,7 @@ class TestWorkflowManager(unittest.TestCase):
             with self.assertRaises(ValueError) as context:
                 WorkflowManager(temp_file)
             
-            self.assertIn('missing required \'name\' field', str(context.exception))
+            self.assertIn('missing required \'id\' field', str(context.exception))
             
         finally:
             os.unlink(temp_file)
@@ -374,7 +378,7 @@ class TestWorkflowManager(unittest.TestCase):
                 'max_selector_attempts': 3,
                 'termination_keyword': 'TERMINATE',
                 'teams': [
-                    {'name': 'MinimalTeam', 'output_file': 'output.md'}
+                    {'id': 'minimal_team_001', 'template': 'MinimalTeam.yaml', 'output_file': 'output.md'}
                 ]
             }
         }
@@ -383,7 +387,7 @@ class TestWorkflowManager(unittest.TestCase):
         
         try:
             wm = WorkflowManager(temp_file)
-            team = wm.get_team_config('MinimalTeam')
+            team = wm.get_team_config('minimal_team_001')
             
             # Check that defaults are set
             self.assertEqual(team.input_files, [])
@@ -410,7 +414,7 @@ class TestConvenienceFunction(unittest.TestCase):
                 'max_selector_attempts': 3,
                 'termination_keyword': 'TERMINATE',
                 'teams': [
-                    {'name': 'TestTeam', 'output_file': 'test.md'}
+                    {'id': 'test_team_001', 'template': 'TestTeam.yaml', 'output_file': 'test.md'}
                 ]
             }
         }
@@ -435,9 +439,10 @@ class TestTeamConfig(unittest.TestCase):
     def test_team_config_creation(self):
         """Test creating a TeamConfig instance"""
         config = TeamConfig(
-            name='TestTeam',
+            id='test_team_001',
+            template='TestTeam.yaml',
             output_file='test.md',
-            depends_on='OtherTeam',
+            depends_on='other_team_001',
             input_files=['input.txt'],
             step_files=['steps.md'],
             agent_result='result',
@@ -449,9 +454,10 @@ class TestTeamConfig(unittest.TestCase):
             termination_keyword='STOP'
         )
         
-        self.assertEqual(config.name, 'TestTeam')
+        self.assertEqual(config.id, 'test_team_001')
+        self.assertEqual(config.template, 'TestTeam.yaml')
         self.assertEqual(config.output_file, 'test.md')
-        self.assertEqual(config.depends_on, 'OtherTeam')
+        self.assertEqual(config.depends_on, 'other_team_001')
         self.assertEqual(config.input_files, ['input.txt'])
         self.assertEqual(config.step_files, ['steps.md'])
         self.assertEqual(config.agent_result, 'result')
