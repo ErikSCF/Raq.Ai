@@ -28,7 +28,7 @@ workflow:
       # Team-specific configuration overrides
       max_messages: 30   # Document assembly needs more messages
 
-    - name: "Process_Analysis_Team"
+    - name: "Epic_Analysis_Team"
       output_file: "epic_analysis"
       depends_on: "Epic_Discovery_Team"  # Parallel analysis of epic discovery
       input_files: []
@@ -38,7 +38,7 @@ workflow:
       # Team-specific configuration overrides
       max_messages: 20   # Process analysis is more focused
 
-    - name: "Process_Analysis_Team"
+    - name: "Document_Analysis_Team"
       output_file: "final_raw_document_analysis"
       depends_on: "Document_Assembly_Team"  # Sequential analysis of assembled document
       input_files: []
