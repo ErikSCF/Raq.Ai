@@ -6,16 +6,15 @@ Loads workflow configuration and creates teams with complete configuration
 (workflow defaults + team-specific overrides).
 """
 
-import yaml
-import os
 import asyncio
 from pathlib import Path
-from typing import Dict, List, Any, Optional
+from typing import List
 
-from team import Team, TeamConfig
+from team import Team
 from observable import ObservableStore
 from asset_utils import AssetUtils
 
+from team_runner import TeamRunnerFactory
 # AssetManager is required for workflows that provide assets; importing it
 # directly ensures a missing module raises ImportError at runtime instead of
 # silently falling back.
@@ -29,12 +28,24 @@ class WorkflowManager:
         """Initialize with path to workflow.yaml file"""
         self.workflow_file_path = workflow_file_path
         self.observable = None
+        self.teams = []
 
-    
+    def run(self):
+        """Run the workflow manager"""
+        print("Running workflow manager...")
+        # Here you would add the logic to start the workflow
+        # For example, you might trigger the first team's tasks
+        # and monitor their progress via the observable store.
+
+        for team in self.teams:
+            team.run()
+
+
     def initialize(self, job_id: str,
                    document_type: str,
                    output_base_path: str,
                    observable: ObservableStore,
+                   team_runner_factory: TeamRunnerFactory,
                    assets: List[str]):
         """Initialize workflow with observable store, create job output path and
         prepare assets/vector memory.
@@ -75,30 +86,48 @@ class WorkflowManager:
             print(f"Error creating job folder: {e}")
 
         # Initialize all teams with the observable store
-        normalized_teams = AssetUtils.load_workflow(self.workflow_file_path)
+        team_configs = AssetUtils.load_workflow(self.workflow_file_path)
         
         # Create and initialize teams
-        team_count = 0
-        for team_data in normalized_teams:
-            # Create TeamConfig and Team
-            team_config = TeamConfig(
-                id=team_data['id'],
-                template=team_data['template'],
-                output_file=team_data['output_file'],
-                depends_on=team_data['depends_on'],
-                input_files=team_data['input_files'],
-                step_files=team_data['step_files'],
-                agent_result=team_data['agent_result'],
-                model=team_data.get('model'),
-                temperature=team_data.get('temperature'),
-                max_messages=team_data.get('max_messages'),
-                allow_repeated_speaker=team_data.get('allow_repeated_speaker'),
-                max_selector_attempts=team_data.get('max_selector_attempts'),
-                termination_keyword=team_data.get('termination_keyword')
-            )
+        for team_config in team_configs:
             team = Team(team_config)
-            team.initialize(self.observable)
-            team_count += 1
+            team.initialize(self.observable, team_runner_factory)
+            self.teams.append(team)
 
-        print(f"Workflow initialized with {team_count} teams")
+        print(f"Workflow initialized with {self.teams.count} teams")
         return self.observable
+
+
+if __name__ == "__main__":
+    # Example usage
+    import sys
+    
+    if len(sys.argv) > 1:
+        workflow_path = sys.argv[1]
+    else:
+        workflow_path = "documents/RAQ/workflow.yaml"
+    
+    try:
+        wm = WorkflowManager(workflow_path)
+        team_configs = AssetUtils.load_workflow(workflow_path)
+        print("Workflow loaded successfully!")
+        print(f"Teams: {[team_config.id for team_config in team_configs]}")
+        
+        # Initialize workflow with observable store
+        print("\nInitializing workflow...")
+        observable = ObservableStore()
+        wm.initialize(
+            job_id="example_job_001",
+            document_type="RAQ", 
+            output_base_path="./output",
+            observable=observable,
+            assets=["example_asset.pdf"]
+        )
+        
+        # Test the observable store
+        print("\nTesting observable store...")
+        observable.set('team_status', {'epic_discovery_001': 'running'})
+        observable.set('team_status', {'epic_discovery_001': 'completed', 'document_assembly_001': 'running'})
+            
+    except Exception as e:
+        print(f"Error: {e}")

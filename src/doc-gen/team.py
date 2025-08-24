@@ -8,7 +8,8 @@ Represents a workflow team with complete configuration.
 from typing import Dict, List, Any, Optional
 from dataclasses import dataclass
 
-from observable import ObservableStore
+from observable import ObservableStore, TaskStatus
+from team_runner import TeamRunnerFactory
 
 
 @dataclass
@@ -38,8 +39,9 @@ class Team:
         """Initialize team with complete configuration"""
         self.config = config
         self.observable = None
+        self.team_runner = None
     
-    def initialize(self, observable: ObservableStore):
+    def initialize(self, observable: ObservableStore, team_runner_factory: TeamRunnerFactory):
         """Initialize team with observable store and subscribe to status changes"""
         self.observable = observable
         # Register team subscription using the team's declared dependency (if any).
@@ -51,12 +53,16 @@ class Team:
             # ObservableStore treats an empty dependency list as an immediate
             # trigger for the default "ready" action so teams with no
             # dependencies run in parallel.
-            agent_deps = [self.depends_on] if self.depends_on else []
-            self._unsubscribe = self.observable.subscribe_team(self, agent_deps)
+            self._unsubscribe = self.observable.subscribe_team(self, self.depends_on)
+            self.team_runner = team_runner_factory.create(self)
+            self.team_runner.initialize()
         except Exception:
             # If observable doesn't support team subscriptions, ignore silently
             self._unsubscribe = None
         print(f"Team '{self.id}' (template: {self.template}) registered with observable store")
+
+    def run(self): 
+        self.observable.set(self.config.id, TaskStatus.PENDING)
 
     def start(self, agent_ids: List[str]):
         """Start the team's agents based on the provided dependent agent IDs.
@@ -67,10 +73,12 @@ class Team:
         """
         # Minimal idempotent scaffold - real implementation should create agents
         print(f"Team '{self.id}': start called for agents {agent_ids}")
+        self.team_runner.run()
 
     def stop(self, force: bool = False):
         """Stop all running agents for this team. If force is True, kill processes."""
         print(f"Team '{self.id}': stop called (force={force})")
+        self.team_runner.stop(force)
     
     def _on_status_change(self, data: Dict[str, Any]):
         """Handle status changes from the observable store"""
@@ -95,7 +103,7 @@ class Team:
         return self.config.output_file
     
     @property
-    def depends_on(self) -> Optional[str]:
+    def depends_on(self) -> List[str]:
         """Get team dependency"""
         return self.config.depends_on
     

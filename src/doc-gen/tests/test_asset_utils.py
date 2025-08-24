@@ -16,6 +16,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from asset_utils import AssetUtils
+from team import TeamConfig
 
 
 class TestAssetUtils(unittest.TestCase):
@@ -51,33 +52,35 @@ class TestAssetUtils(unittest.TestCase):
     
     def test_load_workflow_from_dict(self):
         """Test loading workflow from dictionary"""
-        teams = AssetUtils.load_workflow_from_dict(self.test_workflow_data)
+        team_configs = AssetUtils.load_workflow_from_dict(self.test_workflow_data)
         
-        # Should return 2 teams
-        self.assertEqual(len(teams), 2)
+        # Should return 2 TeamConfig objects
+        self.assertEqual(len(team_configs), 2)
+        self.assertIsInstance(team_configs[0], TeamConfig)
+        self.assertIsInstance(team_configs[1], TeamConfig)
         
         # Test first team gets workflow defaults
-        team1 = teams[0]
-        self.assertEqual(team1['id'], 'team1')
-        self.assertEqual(team1['model'], 'gpt-4o-mini')  # From workflow default
-        self.assertEqual(team1['temperature'], 0.3)  # From workflow default
-        self.assertEqual(team1['max_messages'], 50)  # From workflow default
-        self.assertEqual(team1['allow_repeated_speaker'], False)  # From workflow default
-        self.assertEqual(team1['max_selector_attempts'], 3)  # From workflow default
-        self.assertEqual(team1['termination_keyword'], 'TERMINATE')  # From workflow default
-        self.assertEqual(team1['input_files'], [])  # Default empty list
-        self.assertEqual(team1['step_files'], [])  # Default empty list
-        self.assertIsNone(team1['agent_result'])  # Default None
-        self.assertIsNone(team1['depends_on'])  # Default None
+        team1 = team_configs[0]
+        self.assertEqual(team1.id, 'team1')
+        self.assertEqual(team1.model, 'gpt-4o-mini')  # From workflow default
+        self.assertEqual(team1.temperature, 0.3)  # From workflow default
+        self.assertEqual(team1.max_messages, 50)  # From workflow default
+        self.assertEqual(team1.allow_repeated_speaker, False)  # From workflow default
+        self.assertEqual(team1.max_selector_attempts, 3)  # From workflow default
+        self.assertEqual(team1.termination_keyword, 'TERMINATE')  # From workflow default
+        self.assertEqual(team1.input_files, [])  # Default empty list
+        self.assertEqual(team1.step_files, [])  # Default empty list
+        self.assertIsNone(team1.agent_result)  # Default None
+        self.assertIsNone(team1.depends_on)  # Default None
         
         # Test second team overrides and custom values
-        team2 = teams[1]
-        self.assertEqual(team2['id'], 'team2')
-        self.assertEqual(team2['model'], 'gpt-4')  # Team override
-        self.assertEqual(team2['temperature'], 0.7)  # Team override
-        self.assertEqual(team2['max_messages'], 50)  # From workflow default
-        self.assertEqual(team2['input_files'], ['custom_input.md'])  # Custom value
-        self.assertEqual(team2['step_files'], [])  # Default empty list
+        team2 = team_configs[1]
+        self.assertEqual(team2.id, 'team2')
+        self.assertEqual(team2.model, 'gpt-4')  # Team override
+        self.assertEqual(team2.temperature, 0.7)  # Team override
+        self.assertEqual(team2.max_messages, 50)  # From workflow default
+        self.assertEqual(team2.input_files, ['custom_input.md'])  # Custom value
+        self.assertEqual(team2.step_files, [])  # Default empty list
         
     def test_load_workflow_from_file(self):
         """Test loading workflow from file"""
@@ -87,20 +90,22 @@ class TestAssetUtils(unittest.TestCase):
             temp_file_path = f.name
         
         try:
-            teams = AssetUtils.load_workflow(temp_file_path)
+            team_configs = AssetUtils.load_workflow(temp_file_path)
             
-            # Should return 2 teams
-            self.assertEqual(len(teams), 2)
+            # Should return 2 TeamConfig objects
+            self.assertEqual(len(team_configs), 2)
+            self.assertIsInstance(team_configs[0], TeamConfig)
+            self.assertIsInstance(team_configs[1], TeamConfig)
             
             # Test first team
-            team1 = teams[0]
-            self.assertEqual(team1['id'], 'team1')
-            self.assertEqual(team1['model'], 'gpt-4o-mini')
+            team1 = team_configs[0]
+            self.assertEqual(team1.id, 'team1')
+            self.assertEqual(team1.model, 'gpt-4o-mini')
             
             # Test second team
-            team2 = teams[1]
-            self.assertEqual(team2['id'], 'team2')
-            self.assertEqual(team2['model'], 'gpt-4')  # Override
+            team2 = team_configs[1]
+            self.assertEqual(team2.id, 'team2')
+            self.assertEqual(team2.model, 'gpt-4')  # Override
             
         finally:
             # Clean up temporary file
@@ -184,13 +189,14 @@ class TestAssetUtils(unittest.TestCase):
             }
         }
         
-        teams = AssetUtils.load_workflow_from_dict(minimal_data)
+        team_configs = AssetUtils.load_workflow_from_dict(minimal_data)
         
-        self.assertEqual(len(teams), 1)
-        team1 = teams[0]
-        self.assertEqual(team1['model'], 'gpt-3.5-turbo')
-        self.assertIsNone(team1.get('temperature'))  # No workflow default
-        self.assertEqual(team1['input_files'], [])  # Still gets required field defaults
+        self.assertEqual(len(team_configs), 1)
+        self.assertIsInstance(team_configs[0], TeamConfig)
+        team1 = team_configs[0]
+        self.assertEqual(team1.model, 'gpt-3.5-turbo')
+        self.assertIsNone(team1.temperature)  # No workflow default
+        self.assertEqual(team1.input_files, [])  # Still gets required field defaults
 
 
 if __name__ == '__main__':

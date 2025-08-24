@@ -6,7 +6,7 @@ A minimal key-value store with async callbacks for agent coordination.
 """
 
 import threading
-from typing import Dict, Callable, List, Any, Set, Tuple, Optional
+from typing import Dict, Callable, List, Any, Set
 from concurrent.futures import ThreadPoolExecutor
 from enum import Enum
 
@@ -42,45 +42,37 @@ class TaskStatusDict(Dict[str, TaskStatus]):
 
 
 class ObservableStore:
-    """Simple observable key-value store with async callbacks and team subscriptions
+    """Simple observable key-value store with team subscriptions
 
-    This store keeps two types of subscriptions:
-    - legacy callbacks (callable taking TaskStatusDict) kept for compatibility
-    - team subscriptions registered via `subscribe_team(team, agent_ids, trigger)`
-
-    Team subscriptions are evaluated quickly on updates and, when their trigger
-    condition matches, the long-running team action (`team.start` / `team.stop`) is
-    submitted to the executor to avoid blocking observable evaluation.
+    Simplified: only supports starting a team once all its dependencies are
+    COMPLETE. No trigger modes, no one-shot options—subscriptions fire exactly
+    once when ready (or immediately if there are no dependencies).
     """
 
     def __init__(self, max_workers: int = 10):
         self._data: TaskStatusDict = TaskStatusDict()
     # legacy callback list removed - use team subscriptions only
-        # Team subscriptions: list of dicts with keys: team, agent_ids (set), trigger, one_shot, triggered
-        self._team_subs: List[Dict[str, Any]] = []
-        self._lock = threading.Lock()
-        self._executor = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="callback-")
+    # Team subscriptions: list of dicts with keys: team, agent_ids (set), triggered
+    self._team_subs: List[Dict[str, Any]] = []
+    self._lock = threading.Lock()
+    self._executor = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="callback-")
 
     # Legacy callback-style subscription removed. Use `subscribe_team` for
     # team-driven orchestration. This keeps the store focused on declarative
     # subscriptions handled by the workflow.
 
-    def subscribe_team(self, team: Any, agent_ids: List[str], trigger: str = "ready", one_shot: bool = True) -> Callable[[], None]:
+    def subscribe_team(self, team: Any, agent_ids: List[str]) -> Callable[[], None]:
         """Subscribe a team with dependent agent ids.
 
-        - team: Team instance (must implement start(agent_ids) and stop(force=False))
-        - agent_ids: list of dependent agent ids the team cares about
-        - trigger: "ready"|'all_complete' to call team.start when all deps COMPLETE,
-                   "any_error" to call team.stop(force=True) when any dep is ERROR
-        - one_shot: if True, the subscription is removed after its action fires
+        The team will have start(agent_ids) invoked exactly once when all
+        provided agent_ids are COMPLETE. If agent_ids is empty, the team starts
+        immediately (as soon as the next set call occurs—typically right away).
 
         Returns an unsubscribe function.
         """
         sub = {
             'team': team,
             'agent_ids': set(agent_ids),
-            'trigger': trigger,
-            'one_shot': bool(one_shot),
             'triggered': False,
         }
         with self._lock:
@@ -111,45 +103,22 @@ class ObservableStore:
         # Evaluate team subscriptions quickly and submit long-running actions
         for sub in team_subs_copy:
             try:
-                if self._evaluate_subscription_trigger(sub, data_copy):
-                    # Submit the appropriate team action to executor
-                    if sub['trigger'] in ("ready", "all_complete"):
-                        self._executor.submit(self._safe_team_action, sub, 'start', list(sub['agent_ids']), data_copy)
-                    elif sub['trigger'] == 'any_error':
-                        self._executor.submit(self._safe_team_action, sub, 'stop', True, data_copy)
-                    # Mark triggered if one_shot
-                    if sub.get('one_shot'):
-                        with self._lock:
-                            # Find the original sub object and mark/remove it
-                            for real_sub in self._team_subs:
-                                if real_sub is sub or (real_sub['team'] == sub['team'] and real_sub['agent_ids'] == sub['agent_ids']):
-                                    real_sub['triggered'] = True
-                                    if real_sub.get('one_shot'):
-                                        try:
-                                            self._team_subs.remove(real_sub)
-                                        except ValueError:
-                                            pass
-                                    break
+                if not sub.get('triggered') and self._dependencies_complete(sub, data_copy):
+                    self._executor.submit(self._safe_team_action, sub, 'start', list(sub['agent_ids']), data_copy)
+                    with self._lock:
+                        for real_sub in self._team_subs:
+                            if real_sub is sub or (real_sub['team'] == sub['team'] and real_sub['agent_ids'] == sub['agent_ids']):
+                                real_sub['triggered'] = True
+                                break
             except Exception as e:
-                # Any subscription evaluation error should not take down the store
                 print(f"Warning: subscription evaluation error: {e}")
 
-    def _evaluate_subscription_trigger(self, sub: Dict[str, Any], data: TaskStatusDict) -> bool:
-        """Return True when the subscription's trigger condition is met."""
-        trigger = sub.get('trigger', 'ready')
+    def _dependencies_complete(self, sub: Dict[str, Any], data: TaskStatusDict) -> bool:
+        """Return True when all dependency agent ids are COMPLETE (or none given)."""
         agent_ids: Set[str] = set(sub.get('agent_ids', []))
-
-        # Empty dependency list means "no deps" -> immediate ready trigger
         if not agent_ids:
-            return True if trigger in ("ready", "all_complete") else False
-
-        if trigger in ("ready", "all_complete"):
-            # start when all dependencies are COMPLETE
-            return all(data.get(a, TaskStatus.PENDING) == TaskStatus.COMPLETE for a in agent_ids)
-        if trigger == 'any_error':
-            return any(data.get(a, TaskStatus.PENDING) == TaskStatus.ERROR for a in agent_ids)
-        # Unknown trigger - do nothing
-        return False
+            return True
+        return all(data.get(a, TaskStatus.PENDING) == TaskStatus.COMPLETE for a in agent_ids)
 
     # legacy _safe_callback removed
 
