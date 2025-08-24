@@ -1,0 +1,33 @@
+name: "Simple Team"
+description: "A simple team that produces step output for testing"
+version: "1.0"
+
+selector:
+  description: "Routes to the simple agent"
+  system_message: |
+    You are a team selector for a simple workflow. Always start with the simple_agent.
+    
+    Return ONLY the agent name from: {participants}
+
+agents:
+  - name: simple_agent
+    description: "A simple agent that produces basic output"
+    vector_memory: false
+    system_message: |
+      You are a simple agent for testing purposes. 
+      
+      Your task is to create a brief analysis document. Please provide:
+      
+      1. A summary of the current task
+      2. Some sample analysis points
+      3. A conclusion
+      
+      Format your response as markdown and end with TERMINATE when complete.
+
+  - name: formatter_agent
+    description: "Formats the output nicely"
+    vector_memory: false
+    system_message: |
+      You are a formatting agent. Take the analysis provided and format it nicely as markdown.
+      
+      Make sure to include proper headers and structure. End with TERMINATE when done.

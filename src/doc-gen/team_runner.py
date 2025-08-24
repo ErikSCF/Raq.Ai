@@ -49,7 +49,7 @@ class TeamRunner:
         self.model_client = None
 
     def initialize(self) -> None:
-        """Set up agents and AutoGen team from team configuration template."""
+        """Set up basic team runner configuration."""
         if self.logger and self.team_config:
             self.logger.log(f"Initializing team runner for team {self.team_config.id}", "team_runner")
             self.logger.log(f"Team config: model={self.team_config.model}, max_messages={self.team_config.max_messages}", "team_runner")
@@ -65,13 +65,10 @@ class TeamRunner:
             return
 
         try:
-            # Load the team template YAML file
+            # Just verify the template exists, but don't load it yet
             template_path = Path(self.team_config.job_folder) / self.team_config.template
             if not template_path.exists():
                 raise FileNotFoundError(f"Team template not found: {template_path}")
-
-            with open(template_path, 'r', encoding='utf-8') as f:
-                team_template = yaml.safe_load(f)
 
             # Create OpenAI model client
             self.model_client = OpenAIChatCompletionClient(
@@ -79,14 +76,8 @@ class TeamRunner:
                 temperature=self.team_config.temperature
             )
 
-            # Create agents from template
-            self.agents = self._create_agents(team_template, self.model_client)
-
-            # Create AutoGen team
-            self.autogen_team = self._create_autogen_team(team_template, self.model_client)
-
             if self.logger:
-                self.logger.log(f"Team {self.team_config.id} initialized with {len(self.agents)} agents", "team_runner")
+                self.logger.log(f"Team {self.team_config.id} basic initialization complete", "team_runner")
 
         except Exception as e:
             if self.logger:
@@ -95,7 +86,7 @@ class TeamRunner:
 
         self._initialized = True
 
-    def run(self) -> None:
+    def start(self) -> None:
         """Execute the team's conversation / workflow using AutoGen."""
         if not self._initialized:
             # Lazy initialize if user forgot.
@@ -103,9 +94,13 @@ class TeamRunner:
         
         team_id = self.team_config.id if self.team_config else '<unknown>'
         if self.logger:
-            self.logger.log(f"Running team {team_id}", "team_runner")
+            self.logger.log(f"Starting team execution for {team_id}", "team_runner")
             if self.vector_memory:
                 self.logger.log(f"Team {team_id} has access to vector memory for retrieval", "team_runner")
+
+        # CRITICAL: Create agents and AutoGen team at execution time when step files are available
+        if not self.agents or not self.autogen_team:
+            self._create_team_at_runtime(team_id)
 
         if not self.autogen_team:
             if self.logger:
@@ -182,6 +177,11 @@ class TeamRunner:
         
         try:
             # Check if we have a valid AutoGen team
+            if self.logger:
+                self.logger.log(f"DEBUG: AutoGen team type: {type(self.autogen_team)}", "team_runner")
+                self.logger.log(f"DEBUG: AutoGen team has run_stream: {hasattr(self.autogen_team, 'run_stream')}", "team_runner")
+                self.logger.log(f"DEBUG: AutoGen team has run: {hasattr(self.autogen_team, 'run')}", "team_runner")
+            
             if not hasattr(self.autogen_team, 'run_stream') and not hasattr(self.autogen_team, 'run'):
                 if self.logger:
                     self.logger.log(f"AutoGen team has no run method, using simulation for {team_id}", "team_runner")
@@ -339,44 +339,41 @@ class TeamRunner:
     def _extract_message_content(self, message):
         """Extract clean content and source name from AutoGen message."""
         try:
-            # Handle different AutoGen message formats
-            content = None
-            if hasattr(message, 'content'):
-                content = message.content
-            elif hasattr(message, 'text'):
-                content = message.text
-            elif isinstance(message, dict):
-                content = message.get('content', message.get('text', str(message)))
-            else:
-                content = str(message)
+            clean_content = None
+            source_name = "System"
             
-            # Handle content that might be a list
-            if isinstance(content, list):
-                # Join list items with newlines
-                content = '\n'.join(str(item) for item in content)
-            elif content is None:
-                content = str(message)
-            
-            # Ensure content is a string before calling strip
-            content_str = str(content) if content is not None else ""
-            
-            # Extract source name
-            source_name = "unknown_agent"
-            if hasattr(message, 'source'):
+            if hasattr(message, 'source') and hasattr(message, 'content'):
+                clean_content = message.content
                 source_name = message.source
-            elif hasattr(message, 'name'):
-                source_name = message.name
-            elif hasattr(message, 'sender'):
-                source_name = message.sender
-            elif isinstance(message, dict):
-                source_name = message.get('source', message.get('name', message.get('sender', 'unknown_agent')))
+            elif hasattr(message, 'content'):
+                clean_content = message.content
+                source_name = getattr(message, 'source', 'Unknown')
+            elif hasattr(message, 'text'):
+                clean_content = message.text
+                source_name = getattr(message, 'source', 'System')
+            else:
+                # For unknown message types, create a placeholder instead of dumping raw data
+                message_type = type(message).__name__
+                clean_content = f"[{message_type} event]"
+                source_name = "System"
             
-            return content_str.strip(), source_name
+            # Handle case where clean_content might be a list
+            if isinstance(clean_content, list):
+                if clean_content and isinstance(clean_content[0], str):
+                    clean_content = clean_content[0]
+                else:
+                    clean_content = str(clean_content)
+            
+            # Ensure we return a string
+            if clean_content is None:
+                clean_content = f"[{type(message).__name__} message]"
+            
+            return str(clean_content).strip(), source_name
             
         except Exception as e:
             if self.logger:
                 self.logger.error(f"Error extracting message content: {e}", "team_runner")
-            return str(message), 'unknown_agent'
+            return f"[Message extraction error: {e}]", 'System'
 
     def _simulate_conversation(self, task_message: str, steps_file: Path, raw_file: Path, team_id: str) -> str:
         """Simulate conversation as fallback (original implementation)."""
@@ -476,8 +473,9 @@ The team execution failed with the above error. Please check the configuration a
         for agent_config in agents_config:
             agent_name = agent_config['name']
             
-            # Get system message
+            # Get system message and inject context
             system_message = agent_config.get('system_message', '')
+            system_message = self._inject_agent_context(system_message)
             
             agent_setup = {
                 'description': agent_config.get('description', ''),
@@ -506,13 +504,16 @@ The team execution failed with the above error. Please check the configuration a
         
         return agents
 
-    def _create_autogen_team(self, team_template: Dict[str, Any], model_client) -> SelectorGroupChat:
+    def _create_autogen_team(self, team_template: Dict[str, Any], model_client, agents: Dict[str, AssistantAgent]) -> SelectorGroupChat:
         """Create AutoGen SelectorGroupChat team from template."""
         selector_config = team_template.get('selector', {})
         selector_prompt = selector_config.get('system_message', '')
         
+        # Apply template variable replacements to selector prompt
+        selector_prompt = self._apply_template_variables(selector_prompt, agents)
+        
         return SelectorGroupChat(
-            participants=list(self.agents.values()),
+            participants=list(agents.values()),
             termination_condition=OrTerminationCondition(
                 MaxMessageTermination(self.team_config.max_messages),
                 TextMentionTermination(self.team_config.termination_keyword)
@@ -522,6 +523,34 @@ The team execution failed with the above error. Please check the configuration a
             allow_repeated_speaker=self.team_config.allow_repeated_speaker,
             max_selector_attempts=self.team_config.max_selector_attempts
         )
+
+    def _create_team_at_runtime(self, team_id: str) -> None:
+        """Create agents and AutoGen team at runtime when step files are available."""
+        if self.logger:
+            self.logger.log(f"Creating agents and AutoGen team at runtime for {team_id}", "team_runner")
+        
+        try:
+            # Load the team template YAML file now
+            template_path = Path(self.team_config.job_folder) / self.team_config.template
+            if not template_path.exists():
+                raise FileNotFoundError(f"Team template not found: {template_path}")
+
+            with open(template_path, 'r', encoding='utf-8') as f:
+                team_template = yaml.safe_load(f)
+
+            # Create agents from template with step files now available
+            self.agents = self._create_agents(team_template, self.model_client)
+
+            # Create AutoGen team with step files now available
+            self.autogen_team = self._create_autogen_team(team_template, self.model_client, self.agents)
+
+            if self.logger:
+                self.logger.log(f"Runtime team creation complete for {team_id} with {len(self.agents)} agents", "team_runner")
+
+        except Exception as e:
+            if self.logger:
+                self.logger.error(f"Failed to create team at runtime for {team_id}: {e}", "team_runner")
+            raise
 
     def _create_agent_tools(self, tool_configs: List) -> List[FunctionTool]:
         """Create function tools from tool configurations."""
@@ -547,10 +576,369 @@ The team execution failed with the above error. Please check the configuration a
             task_parts.append(f"\nSTART CONTENT BRIEF:\n{brief_content}")
             task_parts.append(f"\nEND CONTENT BRIEF")
         
+        # Add input files content if available
+        input_files_content = self._load_input_files()
+        if input_files_content:
+            task_parts.append(f"\nINPUT FILES:\n{input_files_content}")
+        
         # Generic workflow start message
         task_parts.append(f"\nPlease begin the {self.team_config.id.replace('_', ' ')} workflow.")
         
         return "\n".join(task_parts)
+
+    def _update_agent_system_messages_with_step_summaries(self):
+        """Update agent system messages with step summaries at execution time."""
+        if not self.agents:
+            return
+        
+        # Get step summaries now that dependent teams may have completed
+        step_summaries = self._get_step_summaries()
+        
+        if not step_summaries:
+            step_summaries = "No step summaries available."
+        
+        # Update each agent's system message if it contains the placeholder
+        for agent_name, agent in self.agents.items():
+            if hasattr(agent, 'system_message') and '{step_summaries}' in agent.system_message:
+                original_message = agent.system_message
+                updated_message = original_message.replace('{step_summaries}', step_summaries)
+                agent.system_message = updated_message
+                
+                if self.logger:
+                    self.logger.log(f"Updated {agent_name} system message with step summaries ({len(step_summaries)} chars)", "team_runner")
+
+    def _load_input_files(self) -> str:
+        """Load the content of input files specified in team configuration."""
+        if not self.team_config or not hasattr(self.team_config, 'input_files'):
+            return ""
+        
+        input_files = getattr(self.team_config, 'input_files', [])
+        if not input_files:
+            return ""
+        
+        content_parts = []
+        for input_file in input_files:
+            
+            # Handle different input file patterns
+            if input_file.endswith("_artifacts"):
+                # Dynamic pattern: "{teamname}_artifacts" -> look up team output
+                content = self._resolve_artifacts_pattern(input_file)
+                if content:
+                    content_parts.append(content)
+            elif "*" in input_file or "?" in input_file:
+                # Glob pattern support
+                content = self._resolve_glob_pattern(input_file)
+                if content:
+                    content_parts.append(content)
+            else:
+                # Literal file path
+                content = self._load_literal_file(input_file)
+                if content:
+                    content_parts.append(content)
+        
+        return "\n".join(content_parts)
+
+    def _resolve_artifacts_pattern(self, input_file: str) -> str:
+        """Resolve {teamname}_artifacts pattern to actual team output."""
+        # Extract team name from pattern
+        team_prefix = input_file.replace("_artifacts", "")
+        
+        # Convert snake_case to expected output file name
+        # e.g., "epic_discovery" -> "epic_discovery.md"
+        expected_file = f"{team_prefix}.md"
+        
+        if hasattr(self.team_config, 'job_folder'):
+            file_path = Path(self.team_config.job_folder) / expected_file
+            if file_path.exists():
+                content = self._load_file_with_size_check(file_path, expected_file)
+                if self.logger:
+                    self.logger.log(f"Resolved {input_file} -> {expected_file}", "team_runner")
+                return content
+            else:
+                if self.logger:
+                    self.logger.error(f"Artifacts file not found: {file_path}", "team_runner")
+        
+        return f"=== {input_file} ===\nERROR: Could not resolve artifacts pattern\n"
+
+    def _resolve_glob_pattern(self, input_file: str) -> str:
+        """Resolve glob pattern to matching files."""
+        import glob
+        
+        if hasattr(self.team_config, 'job_folder'):
+            pattern_path = Path(self.team_config.job_folder) / input_file
+            matching_files = glob.glob(str(pattern_path))
+            
+            if matching_files:
+                content_parts = []
+                for file_path in matching_files:
+                    file_name = Path(file_path).name
+                    content = self._load_file_with_size_check(Path(file_path), file_name)
+                    content_parts.append(content)
+                
+                if self.logger:
+                    self.logger.log(f"Glob {input_file} matched {len(matching_files)} files", "team_runner")
+                return "\n".join(content_parts)
+            else:
+                if self.logger:
+                    self.logger.error(f"Glob pattern {input_file} found no matches", "team_runner")
+        
+        return f"=== {input_file} ===\nERROR: No files matched glob pattern\n"
+
+    def _load_literal_file(self, input_file: str) -> str:
+        """Load a literal file path."""
+        if hasattr(self.team_config, 'job_folder'):
+            file_path = Path(self.team_config.job_folder) / input_file
+        else:
+            file_path = Path(input_file)
+        
+        if file_path.exists():
+            content = self._load_file_with_size_check(file_path, input_file)
+            if self.logger:
+                self.logger.log(f"Loaded input file: {input_file}", "team_runner")
+            return content
+        else:
+            if self.logger:
+                self.logger.error(f"Input file not found: {file_path}", "team_runner")
+            return f"=== {input_file} ===\nERROR: File not found at {file_path}\n"
+
+    def _load_file_with_size_check(self, file_path: Path, display_name: str) -> str:
+        """Load file with intelligent size handling like the old system."""
+        try:
+            file_size = file_path.stat().st_size
+            size_kb = file_size / 1024
+            
+            if size_kb > 50.0:  # Files larger than 50KB - just reference
+                return f"=== {display_name} ===\nFILE REFERENCE (Large File)\nSize: {size_kb:.1f} KB\nPath: {display_name}\n[Content not included due to size - file referenced only]\n"
+            else:
+                # Smaller files - include content
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    file_content = f.read()
+                    # Remove TERMINATE to prevent premature termination
+                    file_content = file_content.replace('TERMINATE', '').strip()
+                
+                return f"=== {display_name} ===\n{file_content}\n"
+                
+        except Exception as e:
+            return f"=== {display_name} ===\nERROR: Could not load file - {e}\n"
+
+    def _inject_agent_context(self, system_message: str) -> str:
+        """Inject context into agent system messages.
+        
+        Now that we create agents at runtime, all placeholders should be resolved immediately.
+        """
+        if not system_message:
+            return system_message
+        
+
+        
+        # Inject step summaries into agent system messages
+        if '{step_summaries}' in system_message:
+            # Get step summaries (should be available now at runtime)
+            step_summaries = self._get_step_summaries()
+            if self.logger:
+                self.logger.log(f"DEBUG: step_summaries length: {len(step_summaries)}", "team_runner")
+                self.logger.log(f"DEBUG: step_summaries preview: {step_summaries[:200]}...", "team_runner")
+            
+            if step_summaries:
+                original_length = len(system_message)
+                system_message = system_message.replace('{step_summaries}', step_summaries)
+                new_length = len(system_message)
+                if self.logger:
+                    self.logger.log(f"DEBUG: Injected step summaries into agent system message (original: {original_length} chars, new: {new_length} chars)", "team_runner")
+                    self.logger.log(f"DEBUG: Updated system message preview: {system_message[:300]}...", "team_runner")
+            else:
+                # CRITICAL: If template expects step_summaries but we can't get them, this is an error
+                error_msg = f"Agent system message contains {{step_summaries}} placeholder but no step summaries are available. Team config step_files: {getattr(self.team_config, 'step_files', 'None')}"
+                if self.logger:
+                    self.logger.error(error_msg, "team_runner")
+                # For now, don't throw exception - use fallback to debug the issue
+                system_message = system_message.replace('{step_summaries}', 'ERROR: No step summaries available - debugging in progress')
+        
+
+        
+        # Inject agent result content into agent system messages
+        if '{agent_result}' in system_message:
+            # Get agent results (these should be available during initialization)
+            agent_result = self._get_agent_result()
+            if agent_result:
+                system_message = system_message.replace('{agent_result}', agent_result)
+                if self.logger:
+                    self.logger.log(f"Injected agent result into agent system message", "team_runner")
+            else:
+                # CRITICAL: If template expects agent_result but we can't get it, this is an error
+                error_msg = f"Agent system message contains {{agent_result}} placeholder but no agent result is available. Team config agent_result: {getattr(self.team_config, 'agent_result', 'None')}"
+                if self.logger:
+                    self.logger.error(error_msg, "team_runner")
+                # For now, don't throw exception - use fallback to debug the issue
+                system_message = system_message.replace('{agent_result}', 'ERROR: No agent result available - debugging in progress')
+        
+        return system_message
+
+    def _apply_template_variables(self, selector_prompt: str, agents: Dict[str, AssistantAgent] = None) -> str:
+        """Apply template variable replacements to selector prompt."""
+        if not selector_prompt:
+            return selector_prompt
+        
+        if self.logger:
+            self.logger.log(f"DEBUG: Original selector prompt: {selector_prompt[:200]}...", "team_runner")
+        
+        # Get input files list
+        input_files = getattr(self.team_config, 'input_files', [])
+        
+        # Get step summaries and agent results
+        step_summaries = self._get_step_summaries()
+        agent_result = self._get_agent_result()
+        
+        if self.logger:
+            self.logger.log(f"DEBUG: Selector prompt step_summaries length: {len(step_summaries)}", "team_runner")
+        
+        # Handle template variable replacements
+        if '{input_files}' in selector_prompt:
+            selector_prompt = selector_prompt.replace('{input_files}', str(input_files))
+        
+        # Inject step summaries
+        if '{step_summaries}' in selector_prompt:
+            if step_summaries:
+                selector_prompt = selector_prompt.replace('{step_summaries}', step_summaries)
+                if self.logger:
+                    self.logger.log(f"DEBUG: Injected step summaries into selector prompt", "team_runner")
+            else:
+                # CRITICAL: If selector expects step_summaries but we can't get them, this is an error
+                error_msg = f"Selector prompt contains {{step_summaries}} placeholder but no step summaries are available. Team config step_files: {getattr(self.team_config, 'step_files', 'None')}"
+                if self.logger:
+                    self.logger.error(error_msg, "team_runner")
+                # For now, don't throw exception - use fallback to debug the issue
+                selector_prompt = selector_prompt.replace('{step_summaries}', 'ERROR: No step summaries available - debugging in progress')
+        
+        # Inject agent result
+        if '{agent_result}' in selector_prompt and agent_result:
+            selector_prompt = selector_prompt.replace('{agent_result}', agent_result)
+        
+        if self.logger:
+            self.logger.log(f"DEBUG: Final selector prompt: {selector_prompt[:200]}...", "team_runner")
+        
+        return selector_prompt
+
+    def _get_step_summaries(self) -> str:
+        """Get step file summaries for context injection."""
+        if not self.team_config or not hasattr(self.team_config, 'step_files'):
+            if self.logger:
+                self.logger.log(f"No team config or step_files attribute", "team_runner")
+            return ""
+        
+        step_files = getattr(self.team_config, 'step_files', [])
+        if not step_files:
+            if self.logger:
+                self.logger.log(f"No step files configured for team", "team_runner")
+            return ""
+        
+        if self.logger:
+            self.logger.log(f"Processing {len(step_files)} step files: {step_files}", "team_runner")
+        
+        summaries = []
+        for step_file in step_files:
+            # Construct full path to the step file
+            if hasattr(self.team_config, 'job_folder'):
+                file_path = Path(self.team_config.job_folder) / step_file
+            else:
+                file_path = Path(step_file)
+            
+            if self.logger:
+                self.logger.log(f"Looking for step file: {file_path}", "team_runner")
+            
+            if file_path.exists():
+                try:
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                    
+                    # Parse conversation sections for structured summary
+                    agent_flow = self._extract_agent_flow(content)
+                    summaries.append(f"=== {step_file.upper()} ===\n{agent_flow}")
+                    
+                    if self.logger:
+                        self.logger.log(f"Loaded step summary: {step_file} ({len(content)} chars -> {len(agent_flow)} chars)", "team_runner")
+                except Exception as e:
+                    if self.logger:
+                        self.logger.error(f"Failed to load step file {step_file}: {e}", "team_runner")
+            else:
+                if self.logger:
+                    self.logger.error(f"Step file not found: {file_path}", "team_runner")
+        
+        result = '\n\n'.join(summaries) if summaries else ""
+        if self.logger:
+            self.logger.log(f"Final step summaries: {len(result)} chars", "team_runner")
+        return result
+
+    def _get_agent_result(self) -> str:
+        """Get agent result content for context injection."""
+        if not self.team_config or not hasattr(self.team_config, 'agent_result'):
+            return ""
+        
+        agent_result_ref = getattr(self.team_config, 'agent_result', None)
+        if not agent_result_ref:
+            return ""
+        
+        # If agent_result points to a file, load it
+        if hasattr(self.team_config, 'job_folder'):
+            result_path = Path(self.team_config.job_folder) / agent_result_ref
+            if result_path.exists():
+                try:
+                    with open(result_path, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                    if self.logger:
+                        self.logger.log(f"Loaded agent result: {agent_result_ref}", "team_runner")
+                    return content
+                except Exception as e:
+                    if self.logger:
+                        self.logger.error(f"Failed to load agent result {agent_result_ref}: {e}", "team_runner")
+        
+        return ""
+
+    def _extract_agent_flow(self, steps_content: str) -> str:
+        """Extract agent interaction flow from conversation steps."""
+        if not steps_content:
+            return "No conversation steps found"
+        
+        lines = steps_content.split('\n')
+        agent_interactions = []
+        current_section = None
+        current_content = []
+        
+        # Look for section markers and agent interactions
+        for line in lines:
+            # Check for section markers
+            if line.strip().startswith('<!--- SECTION:') and line.strip().endswith('--->'): 
+                if current_section and current_content:
+                    # Save previous section
+                    content_summary = ' '.join(current_content)[:200] + "..." if len(' '.join(current_content)) > 200 else ' '.join(current_content)
+                    agent_interactions.append(f"{current_section}: {content_summary}")
+                
+                # Start new section
+                current_section = line.strip()[14:-4].strip()  # Remove <!--- SECTION: and --->
+                current_content = []
+            elif line.strip().startswith('<!--- END SECTION:'):
+                # End current section
+                if current_section and current_content:
+                    content_summary = ' '.join(current_content)[:200] + "..." if len(' '.join(current_content)) > 200 else ' '.join(current_content)
+                    agent_interactions.append(f"{current_section}: {content_summary}")
+                current_section = None
+                current_content = []
+            elif current_section and line.strip():
+                # Add content to current section
+                current_content.append(line.strip())
+        
+        # Handle any remaining section
+        if current_section and current_content:
+            content_summary = ' '.join(current_content)[:200] + "..." if len(' '.join(current_content)) > 200 else ' '.join(current_content)
+            agent_interactions.append(f"{current_section}: {content_summary}")
+        
+        if agent_interactions:
+            return '\n'.join(agent_interactions)
+        else:
+            # Fallback to truncated raw content
+            if len(steps_content) > 1500:
+                return steps_content[:1500] + "\n\n[Content truncated for context efficiency...]"
+            return steps_content
 
     def _load_content_brief(self) -> str:
         """Load the content brief file if available."""

@@ -1,15 +1,28 @@
 workflow:
-  model: gpt-4o-mini
+  name: "Step Summaries Test Workflow"
+  description: "Test workflow to debug step_summaries functionality"
+  
+  model: "gpt-4o-mini"
   temperature: 0.3
   max_messages: 10
   allow_repeated_speaker: false
   max_selector_attempts: 3
-  termination_keyword: 'TERMINATE'
+  termination_keyword: "TERMINATE"
+  
   teams:
-    - id: test_team_1
-      template: Root_Team.yaml
-      output_file: test_output_1.md
-    - id: test_team_2
-      template: Final_Team.yaml
-      output_file: test_output_2.md
-      depends_on: test_team_1
+    - id: "first_team"
+      template: "Simple_Team.yaml"
+      output_file: "first_output"
+      depends_on: null
+      input_files: []
+      step_files: []
+      agent_result: null
+
+    - id: "analysis_team"
+      template: "Analysis_Team.yaml" 
+      output_file: "analysis_output"
+      depends_on: "first_team"
+      input_files: []
+      step_files:
+        - "first_output.steps.md"
+      agent_result: null

@@ -14,7 +14,7 @@ from pathlib import Path
 
 # Configuration variables for easy VS Code execution
 # Change these values and run the script directly from VS Code
-DOCUMENT_TYPE = "simple"  # Options: "RAQ", "simple", "test"
+DOCUMENT_TYPE = "RAQ"  # Options: "RAQ", "simple", "test"
 ASSETS_PATH = "assets"    # Path to assets folder or file
 OUTPUT_BASE = "./output"  # Output directory
 

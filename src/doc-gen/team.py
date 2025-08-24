@@ -114,7 +114,7 @@ class Team:
             self.orchestrator.set(self.id, TaskStatus.STARTED)
             
             # Do the actual work
-            self.team_runner.run()
+            self.team_runner.start()
             
             # Mark as completed
             self.orchestrator.set(self.id, TaskStatus.COMPLETE)
