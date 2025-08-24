@@ -41,7 +41,7 @@ except ImportError:
 class AssetManager:
     """Manages project assets and creates vector databases for RAG."""
     
-    def __init__(self, job_id: str, job_folder: str, assets: List[str] = None):
+    def __init__(self, job_id: str, job_folder: str, document_type: str, assets: List[str] = None):
         # Require PDF and DOCX processing libraries to be present.
         if not HAS_PDF or not HAS_DOCX:
             missing = []
@@ -53,6 +53,7 @@ class AssetManager:
 
         self.job_id = job_id
         self.job_folder = Path(job_folder)
+        self.document_type = document_type
         self.assets_dir = self.job_folder / "assets"
         self.memory = None
         self.moved_files = []
@@ -60,9 +61,48 @@ class AssetManager:
         # Create assets directory
         self.assets_dir.mkdir(parents=True, exist_ok=True)
         
+        # Copy document type template files first
+        self._copy_document_template_files()
+        
         # Move provided assets if any
         if assets:
             self._move_assets(assets)
+    
+    def _copy_document_template_files(self):
+        """Copy document template files from documents/{document_type}/ to job assets folder"""
+        import shutil
+        
+        # Check if we're in a test environment by looking for tests/documents first
+        current_file = Path(__file__).resolve()
+        test_source_dir = current_file.parent / "tests" / "documents" / self.document_type
+        prod_source_dir = current_file.parent / "documents" / self.document_type
+        
+        if test_source_dir.exists():
+            documents_dir = test_source_dir
+        elif prod_source_dir.exists():
+            documents_dir = prod_source_dir
+        else:
+            print(f"Warning: Document type '{self.document_type}' not found in documents/ or tests/documents/")
+            return
+        
+        print(f"Copying document template files from {documents_dir} to {self.assets_dir}")
+        
+        # Copy all non-workflow files to assets (workflow.yaml should be handled by WorkflowManager)
+        for item in documents_dir.iterdir():
+            if item.is_file() and item.suffix not in ['.yaml', '.yml']:
+                destination = self.assets_dir / item.name
+                shutil.copy2(item, destination)
+                self.moved_files.append(str(destination))
+                print(f"Copied template asset: {item.name}")
+            elif item.is_dir():
+                # Copy subdirectories recursively to assets
+                destination = self.assets_dir / item.name
+                shutil.copytree(item, destination, exist_ok=True)
+                # Add all files in the copied directory to moved_files
+                for copied_file in destination.rglob("*"):
+                    if copied_file.is_file():
+                        self.moved_files.append(str(copied_file))
+                print(f"Copied template directory: {item.name}")
     
     def _move_assets(self, assets: List[str]) -> List[str]:
         """Move provided assets to the job folder."""

@@ -25,9 +25,11 @@ from asset_manager import AssetManager
 class WorkflowManager:
     """Manages workflow configuration and team creation"""
     
-    def __init__(self, workflow_file_path: str, logger_factory: Optional[LoggerFactory] = None):
-        """Initialize with path to workflow.yaml file and optional logger factory"""
-        self.workflow_file_path = workflow_file_path
+    def __init__(self, logger_factory: Optional[LoggerFactory] = None):
+        """Initialize workflow manager with optional logger factory"""
+        self.job_id = None
+        self.document_type = None
+        self.job_folder = None
         self.orchestrator = None
         self.teams = []
         self.logger_factory = logger_factory or get_default_factory()
@@ -111,46 +113,55 @@ class WorkflowManager:
                    orchestrator: WorkflowOrchestrator,
                    team_runner_factory: TeamRunnerFactory,
                    assets: List[str]):
-        """Initialize workflow with observable store, create job output path and
+        """Initialize workflow with orchestrator, create job output path and
         prepare assets/vector memory.
 
-        All parameters are required to ensure proper workflow context setup.
+        The workflow configuration is copied from documents/{document_type}/ to the job folder
+        and then loaded from there, making each job self-contained.
         """
         self.orchestrator = orchestrator
+        self.job_id = job_id
+        self.document_type = document_type
+        
+        # Create the job folder structure
+        job_base = Path(output_base_path)
+        self.job_folder = job_base / document_type / job_id
+        self.job_folder.mkdir(parents=True, exist_ok=True)
+        self.logger.log(f"Created job output folder: {self.job_folder}")
+        
+        # Copy all document template files to job folder
+        self._copy_document_template_files()
+        
+        # Now use the copied workflow.yaml from the job folder
+        workflow_file_path = str(self.job_folder / "workflow.yaml")
+        
+        if not Path(workflow_file_path).exists():
+            raise FileNotFoundError(f"Workflow configuration not found after copy: {workflow_file_path}")
+        
+        self.logger.log(f"Using workflow configuration: {workflow_file_path}")
 
-        # Create the output folder and prepare the asset vector memory
+        # Create vector memory with provided assets (AssetManager import is required)
         try:
-            job_base = Path(output_base_path)
-            # Create document-type specific folder and job folder
-            job_folder = job_base / document_type / job_id
-            job_folder.mkdir(parents=True, exist_ok=True)
-            self.logger.log(f"Created job output folder: {job_folder}")
-
-            # Create vector memory with provided assets (AssetManager import is required)
+            manager = AssetManager(job_id, str(self.job_folder), document_type, assets)
+            # create_vector_memory is async in the old manager; run it
+            memory = None
             try:
-                manager = AssetManager(job_id, str(job_folder), assets)
-                # create_vector_memory is async in the old manager; run it
-                memory = None
-                try:
-                    memory = asyncio.run(manager.create_vector_memory())
-                except RuntimeError:
-                    # If we're already in an event loop, schedule and wait
-                    loop = asyncio.get_event_loop()
-                    memory = loop.run_until_complete(manager.create_vector_memory())
-                self.asset_manager = manager
-                self.memory = memory
-                if memory:
-                    self.logger.log(f"Asset memory configured for job {job_id}")
-                else:
-                    self.logger.log(f"Asset memory not configured for job {job_id}")
-            except Exception as e:
-                self.logger.error(f"Error preparing assets/vector memory: {e}")
-
+                memory = asyncio.run(manager.create_vector_memory())
+            except RuntimeError:
+                # If we're already in an event loop, schedule and wait
+                loop = asyncio.get_event_loop()
+                memory = loop.run_until_complete(manager.create_vector_memory())
+            self.asset_manager = manager
+            self.memory = memory
+            if memory:
+                self.logger.log(f"Asset memory configured for job {job_id}")
+            else:
+                self.logger.log(f"Asset memory not configured for job {job_id}")
         except Exception as e:
-            self.logger.error(f"Error creating job folder: {e}")
+            self.logger.error(f"Error preparing assets/vector memory: {e}")
 
-        # Initialize all teams with the observable store
-        team_configs = AssetUtils.load_workflow(self.workflow_file_path)
+        # Initialize all teams with the orchestrator using the copied workflow config
+        team_configs = AssetUtils.load_workflow(workflow_file_path)
         
         # Create and initialize teams
         for team_config in team_configs:
@@ -160,39 +171,68 @@ class WorkflowManager:
 
         self.logger.log(f"Workflow initialized with {len(self.teams)} teams")
         return self.orchestrator
+    
+    def _copy_document_template_files(self):
+        """Copy all document template files from documents/{document_type}/ to job folder"""
+        import shutil
+        
+        # Check if we're in a test environment by looking for tests/documents first
+        current_file = Path(__file__)
+        test_source_dir = current_file.parent / "tests" / "documents" / self.document_type
+        prod_source_dir = current_file.parent / "documents" / self.document_type
+        
+        if test_source_dir.exists():
+            source_dir = test_source_dir
+        elif prod_source_dir.exists():
+            source_dir = prod_source_dir
+        else:
+            raise FileNotFoundError(f"Document type '{self.document_type}' not found in documents/ or tests/documents/")
+        
+        self.logger.log(f"Copying document template files from {source_dir}")
+        
+        # Copy all files from the document type folder
+        for item in source_dir.iterdir():
+            if item.is_file():
+                destination = self.job_folder / item.name
+                shutil.copy2(item, destination)
+                self.logger.log(f"Copied template file: {item.name}")
+            elif item.is_dir():
+                # Copy subdirectories recursively
+                destination = self.job_folder / item.name
+                shutil.copytree(item, destination, exist_ok=True)
+                self.logger.log(f"Copied template directory: {item.name}")
+        
+        self.logger.log(f"Document template files copied to job folder")
 
 
 if __name__ == "__main__":
     # Example usage
     import sys
     
-    if len(sys.argv) > 1:
-        workflow_path = sys.argv[1]
-    else:
-        workflow_path = "documents/RAQ/workflow.yaml"
-    
     try:
-        wm = WorkflowManager(workflow_path)
-        team_configs = AssetUtils.load_workflow(workflow_path)
-        wm.logger.log("Workflow loaded successfully!")
-        wm.logger.log(f"Teams: {[team_config.id for team_config in team_configs]}")
+        wm = WorkflowManager()
         
         # Initialize workflow with orchestrator
-        wm.logger.log("Initializing workflow...")
+        print("Initializing workflow...")
         orchestrator = WorkflowOrchestrator()
+        from team_runner import TeamRunnerFactory
+        
         wm.initialize(
             job_id="example_job_001",
             document_type="RAQ", 
             output_base_path="./output",
             orchestrator=orchestrator,
             team_runner_factory=TeamRunnerFactory(wm.logger_factory),
-            assets=["example_asset.pdf"]
+            assets=["example_asset.pdf"] if len(sys.argv) > 1 else []
         )
         
+        print("Workflow initialized successfully!")
+        print(f"Teams: {[team.id for team in wm.teams]}")
+        
         # Test the orchestrator
-        wm.logger.log("Testing orchestrator...")
-        orchestrator.set('epic_discovery_001', TaskStatus.STARTED)
-        orchestrator.set('epic_discovery_001', TaskStatus.COMPLETE)
+        print("Testing orchestrator...")
+        orchestrator.set('team_001', TaskStatus.STARTED)
+        orchestrator.set('team_001', TaskStatus.COMPLETE)
             
     except Exception as e:
         print(f"Error: {e}")  # Keep one print for critical startup errors

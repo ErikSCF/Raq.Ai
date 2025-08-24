@@ -59,7 +59,7 @@ class TestWorkflowManagerWithLogger(unittest.TestCase):
     def test_workflow_with_console_logger(self):
         """Test workflow initialization with console logger (no assertions on output)"""
         factory = ConsoleLoggerFactory()
-        wm = WorkflowManager(self.workflow_path, factory)
+        wm = WorkflowManager(factory)
         
         # This should log to console
         orchestrator = WorkflowOrchestrator()
@@ -74,13 +74,13 @@ class TestWorkflowManagerWithLogger(unittest.TestCase):
         
         # Basic assertions
         self.assertEqual(len(wm.teams), 2)
-        self.assertEqual(wm.teams[0].id, 'test_team_001')
-        self.assertEqual(wm.teams[1].id, 'test_team_002')
+        self.assertEqual(wm.teams[0].id, 'test_team_1')
+        self.assertEqual(wm.teams[1].id, 'test_team_2')
 
     def test_workflow_with_test_logger(self):
         """Test workflow initialization with test logger and capture logs"""
         factory = MemoryLoggerFactory()
-        wm = WorkflowManager(self.workflow_path, factory)
+        wm = WorkflowManager(factory)
         
         orchestrator = WorkflowOrchestrator()
         wm.initialize(
@@ -118,7 +118,7 @@ class TestWorkflowManagerWithLogger(unittest.TestCase):
         factory = MemoryLoggerFactory()
         
         # Test with invalid workflow path
-        wm = WorkflowManager("/nonexistent/path.yaml", factory)
+        wm = WorkflowManager(factory)
         
         # This should cause an error during asset loading if we try to initialize
         # For now, just test that the logger factory was set up correctly

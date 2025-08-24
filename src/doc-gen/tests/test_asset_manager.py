@@ -21,22 +21,22 @@ def test_move_assets_and_summary(tmp_path):
     # If required libs missing, AssetManager should raise ImportError
     if not am.HAS_PDF or not am.HAS_DOCX:
         with pytest.raises(ImportError):
-            _ = am.AssetManager(job_id="testjob", job_folder=str(job_folder), assets=[str(src1), str(src2)])
+            _ = am.AssetManager(job_id="testjob", job_folder=str(job_folder), document_type="test", assets=[str(src1), str(src2)])
         return
 
-    manager = am.AssetManager(job_id="testjob", job_folder=str(job_folder), assets=[str(src1), str(src2)])
+    manager = am.AssetManager(job_id="testjob", job_folder=str(job_folder), document_type="test", assets=[str(src1), str(src2)])
 
-    # Ensure files were moved/copied
-    assert len(manager.moved_files) == 2
+    # Ensure files were moved/copied (includes document template + user assets)
+    assert len(manager.moved_files) == 3  # brand_content_brief.md + file1.txt + doc.md
     for p in manager.moved_files:
         assert Path(p).exists()
 
     summary = manager.get_asset_summary()
-    assert summary["total_files"] == 2
+    assert summary["total_files"] == 3  # includes document template file
     assert isinstance(summary["types"], dict)
 
     files = manager.list_asset_files()
-    assert len(files) == 2
+    assert len(files) == 3  # includes document template file
 
     formatted = manager.format_assets_for_agent()
     assert "Total files" in formatted
@@ -61,10 +61,10 @@ def test_create_vector_memory_skips_when_unavailable(monkeypatch, tmp_path):
     # constructing the manager should raise ImportError.
     if not (am.HAS_PDF and am.HAS_DOCX):
         with pytest.raises(ImportError):
-            _ = am.AssetManager(job_id="j2", job_folder=str(tmp_path / "job2"), assets=[])
+            _ = am.AssetManager(job_id="j2", job_folder=str(tmp_path / "job2"), document_type="test", assets=[])
         return
 
-    manager = am.AssetManager(job_id="j2", job_folder=str(tmp_path / "job2"), assets=[])
+    manager = am.AssetManager(job_id="j2", job_folder=str(tmp_path / "job2"), document_type="test", assets=[])
 
     memory = asyncio.run(manager.create_vector_memory())
     assert memory is None
@@ -92,7 +92,7 @@ def test_docx_processing_and_vector_memory(monkeypatch, tmp_path):
     monkeypatch.setattr(am, "PersistentChromaDBVectorMemoryConfig", lambda **kwargs: kwargs)
     monkeypatch.setattr(am, "SentenceTransformerEmbeddingFunctionConfig", lambda **kwargs: kwargs)
 
-    manager = am.AssetManager(job_id="docxjob", job_folder=str(tmp_path / "job_docx"), assets=[str(doc_path)])
+    manager = am.AssetManager(job_id="docxjob", job_folder=str(tmp_path / "job_docx"), document_type="test", assets=[str(doc_path)])
     memory = asyncio.run(manager.create_vector_memory())
 
     assert memory is not None
@@ -133,7 +133,7 @@ def test_pdf_processing_and_vector_memory_with_fake_reader(monkeypatch, tmp_path
     pdf_path = tmp_path / "doc.pdf"
     pdf_path.write_bytes(b"%PDF-1.4\n%EOF\n")
 
-    manager = am.AssetManager(job_id="pdfjob", job_folder=str(tmp_path / "job_pdf"), assets=[str(pdf_path)])
+    manager = am.AssetManager(job_id="pdfjob", job_folder=str(tmp_path / "job_pdf"), document_type="test", assets=[str(pdf_path)])
     memory = asyncio.run(manager.create_vector_memory())
 
     assert memory is not None

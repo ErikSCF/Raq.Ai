@@ -5,7 +5,7 @@ Team
 Represents a workflow team with complete configuration.
 """
 
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Union
 from dataclasses import dataclass
 
 from workflow_orchestrator import WorkflowOrchestrator, TaskStatus
@@ -20,7 +20,7 @@ class TeamConfig:
     id: str
     template: str
     output_file: str
-    depends_on: Optional[str]
+    depends_on: Optional[Union[str, List[str]]]
     input_files: List[str]
     step_files: List[str]
     agent_result: Optional[str]
@@ -67,10 +67,14 @@ class Team:
             # trigger for the default "ready" action so teams with no
             # dependencies run in parallel.
             
-            # Convert depends_on string to list format expected by subscribe_team
+            # Convert depends_on to list format expected by subscribe_team
             if self.depends_on:
-                # Handle comma-separated dependencies
-                dependencies = [dep.strip() for dep in self.depends_on.split(',')]
+                # Handle both string and list dependencies  
+                if isinstance(self.depends_on, list):
+                    dependencies = self.depends_on
+                else:
+                    # Handle comma-separated dependencies
+                    dependencies = [dep.strip() for dep in self.depends_on.split(',')]
             else:
                 dependencies = []
             
@@ -145,7 +149,7 @@ class Team:
         return self.config.output_file
     
     @property
-    def depends_on(self) -> List[str]:
+    def depends_on(self) -> Optional[Union[str, List[str]]]:
         """Get team dependency"""
         return self.config.depends_on
     
