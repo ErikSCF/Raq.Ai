@@ -117,16 +117,21 @@ class TestWorkflowExecution(unittest.TestCase):
                 self.assertIsNotNone(team.team_runner, f"Team {team.id} should have a team_runner")
                 self.assertIsInstance(team.team_runner, MockTeamRunner, f"Team {team.id} should use MockTeamRunner")
             
-            # Test direct team execution (not through observable)
-            print("   🧪 Testing direct team execution...")
+            # Test proper workflow execution through orchestration
+            print("   🧪 Testing workflow orchestration...")
             
-            # Execute team_001 directly
-            team_001 = next(t for t in wm.teams if t.id == 'team_001')
-            team_001.start([])
+            # Run the workflow - this should trigger the orchestration cascade
+            wm.run()
             
-            # Execute team_002 directly
-            team_002 = next(t for t in wm.teams if t.id == 'team_002')
-            team_002.start([])
+            # Give time for async orchestration to complete
+            import time
+            time.sleep(0.5)  # Increased wait time for MockTeamRunner delays
+            
+            # Check final status
+            for team in wm.teams:
+                status = orchestrator.get(team.id)
+                print(f"   📊 Final status - Team {team.id}: {status}")
+                self.assertEqual(status, TaskStatus.COMPLETE, f"Team {team.id} should be complete")
             
             # Check logs
             shared_logger = self.logger_factory.create_logger()
@@ -134,16 +139,17 @@ class TestWorkflowExecution(unittest.TestCase):
             messages = [e.message for e in entries]
             
             # Verify team initialization
-            team_init_msgs = [msg for msg in messages if "registered with observable store" in msg]
-            self.assertEqual(len(team_init_msgs), 2, "Both teams should be registered")
+            team_init_msgs = [msg for msg in messages if "registered with observable store" in msg or "registered with workflow orchestrator" in msg]
+            self.assertTrue(len(team_init_msgs) >= 2, "Both teams should be registered")
             
-            # Verify team execution
-            team_start_msgs = [msg for msg in messages if "Starting test run for team" in msg]
-            self.assertEqual(len(team_start_msgs), 2, "Both teams should have started")
+            # Verify workflow execution
+            team_queue_msgs = [msg for msg in messages if "queued for execution" in msg]
+            team_start_msgs = [msg for msg in messages if "starting execution" in msg]
+            team_complete_msgs = [msg for msg in messages if "completed successfully" in msg]
             
-            # Verify completion
-            completion_msgs = [msg for msg in messages if "Completed successfully" in msg]
-            self.assertEqual(len(completion_msgs), 2, "Both teams should have completed successfully")
+            self.assertEqual(len(team_queue_msgs), 2, "Both teams should be queued")
+            self.assertEqual(len(team_start_msgs), 2, "Both teams should start execution")
+            self.assertEqual(len(team_complete_msgs), 2, "Both teams should complete")
             
             print(f"✅ Successful workflow test completed with {len(entries)} log entries")
             

@@ -36,12 +36,16 @@ class WorkflowManager:
     def run(self):
         """Run the workflow manager"""
         self.logger.log("Running workflow manager...")
-        # Here you would add the logic to start the workflow
-        # For example, you might trigger the first team's tasks
-        # and monitor their progress via the observable store.
-
+        # Queue all teams first
         for team in self.teams:
             team.run()
+
+        # Now enable orchestration and trigger the first orchestration cycle
+        if self.orchestrator:
+            self.orchestrator.run()
+            self.logger.log("Orchestration enabled - workflow execution started")
+        else:
+            self.logger.error("Orchestrator not initialized - call initialize() first")
 
 
     def initialize(self, job_id: str,

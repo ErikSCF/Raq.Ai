@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 """
-Test WorkflowOrchestrator team subscription functionality
-
-Testing the declarative team subscription feature that drives workflow execution.
+Tests for ObservableStore team-driven subscriptions
 """
 
 import time
@@ -33,7 +31,7 @@ class FakeTeam:
         self.stop_event.set()
 
 
-class TestWorkflowOrchestratorTeamSubscriptions(unittest.TestCase):
+class TestObservableTeamSubscriptions(unittest.TestCase):
 
     def test_subscribe_team_ready_triggers_start_when_all_complete(self):
         store = WorkflowOrchestrator(max_workers=4)
@@ -49,9 +47,6 @@ class TestWorkflowOrchestratorTeamSubscriptions(unittest.TestCase):
 
         # set second agent to complete -> should trigger start
         store.set('a2', TaskStatus.COMPLETE)
-        
-        # Enable orchestration to trigger team starts
-        store.run()
 
         # wait for executor to run start
         started = team.start_event.wait(timeout=1.0)
@@ -67,9 +62,6 @@ class TestWorkflowOrchestratorTeamSubscriptions(unittest.TestCase):
 
         # any set call should trigger start since no dependencies
         store.set('any_key', TaskStatus.COMPLETE)
-        
-        # Enable orchestration to trigger team starts
-        store.run()
 
         # wait for executor to run start
         started = team.start_event.wait(timeout=1.0)

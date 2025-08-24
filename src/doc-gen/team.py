@@ -49,7 +49,7 @@ class Team:
     def __init__(self, config: TeamConfig, logger_factory: Optional[LoggerFactory] = None):
         """Initialize team with complete configuration"""
         self.config = config
-        self.observable = None
+        self.orchestrator = None
         self.team_runner = None
         self.logger_factory = logger_factory or get_default_factory()
         self.logger = self.logger_factory.create_logger("team")
@@ -84,18 +84,38 @@ class Team:
         self.logger.log(f"Team '{self.id}' (template: {self.template}) registered with observable store")
 
     def run(self): 
-        self.observable.set(self.config.id, TaskStatus.PENDING)
+        """Queue this team for execution by setting status to PENDING"""
+        if not self.orchestrator:
+            raise RuntimeError(f"Team {self.id} not initialized - call initialize() first")
+        self.orchestrator.set(self.id, TaskStatus.PENDING)
+        self.logger.log(f"Team '{self.id}' queued for execution")
 
     def start(self, agent_ids: List[str]):
-        """Start the team's agents based on the provided dependent agent IDs.
+        """Start the team's execution. Called by orchestrator when dependencies are satisfied.
 
-        This method is intended to be long-running and idempotent: calling it
-        multiple times should not create duplicate agents. Teams should update
-        the observable with agent status changes as agents run.
+        This method does the actual team work and updates status accordingly.
         """
-        # Minimal idempotent scaffold - real implementation should create agents
-        self.logger.log(f"Team '{self.id}': start called for agents {agent_ids}")
-        self.team_runner.run()
+        if not self.team_runner:
+            raise RuntimeError(f"Team {self.id} not initialized properly")
+            
+        self.logger.log(f"Team '{self.id}' starting execution with agents {agent_ids}")
+        
+        try:
+            # Mark as started
+            self.orchestrator.set(self.id, TaskStatus.STARTED)
+            
+            # Do the actual work
+            self.team_runner.run()
+            
+            # Mark as completed
+            self.orchestrator.set(self.id, TaskStatus.COMPLETE)
+            self.logger.log(f"Team '{self.id}' completed successfully")
+            
+        except Exception as e:
+            # Mark as error
+            self.orchestrator.set(self.id, TaskStatus.ERROR)
+            self.logger.error(f"Team '{self.id}' failed: {e}")
+            raise
 
     def stop(self, force: bool = False):
         """Stop all running agents for this team. If force is True, kill processes."""

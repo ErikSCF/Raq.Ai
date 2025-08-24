@@ -61,6 +61,7 @@ class WorkflowOrchestrator:
         self._executor = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="orchestrator-")
         self._logger_factory = logger_factory or get_default_factory()
         self._logger = self._logger_factory.create_logger("workflow_orchestrator")
+        self._orchestration_enabled = False  # Orchestration disabled until run() is called
 
     def subscribe_team(self, team: Any, agent_ids: List[str]) -> Callable[[], None]:
         """Subscribe a team with dependent agent ids.
@@ -91,6 +92,37 @@ class WorkflowOrchestrator:
         with self._lock:
             return self._data.get(key, TaskStatus.PENDING)
     
+    def run(self):
+        """Enable orchestration and trigger the first orchestration cycle.
+        
+        This allows teams to be queued with set() calls before enabling orchestration,
+        preventing race conditions where dependencies complete before all teams are queued.
+        """
+        with self._lock:
+            if self._orchestration_enabled:
+                self._logger.log("Orchestration already enabled")
+                return
+            
+            self._orchestration_enabled = True
+            self._logger.log("Orchestration enabled - triggering first orchestration cycle")
+            
+            # Create copies for evaluation outside the lock
+            data_copy = self._data.copy()
+            team_subs_copy = [dict(s) for s in self._team_subs]
+
+        # Trigger initial orchestration cycle
+        for sub in team_subs_copy:
+            try:
+                if not sub.get('triggered') and self._should_trigger_team(sub, data_copy):
+                    self._executor.submit(self._safe_team_action, sub, 'start', list(sub['agent_ids']), data_copy)
+                    with self._lock:
+                        for real_sub in self._team_subs:
+                            if real_sub is sub or (real_sub['team'] == sub['team'] and real_sub['agent_ids'] == sub['agent_ids']):
+                                real_sub['triggered'] = True
+                                break
+            except Exception as e:
+                self._logger.error(f"initial orchestration evaluation error: {e}")
+    
     def set(self, key: str, value: TaskStatus):
         """Set a key-value pair and notify subscribers asynchronously.
 
@@ -99,6 +131,9 @@ class WorkflowOrchestrator:
         """
         with self._lock:
             self._data[key] = value
+            # Skip orchestration if not enabled yet
+            if not self._orchestration_enabled:
+                return
             # Create copies for evaluation outside the lock
             data_copy = self._data.copy()
             team_subs_copy = [dict(s) for s in self._team_subs]
@@ -106,7 +141,7 @@ class WorkflowOrchestrator:
         # Evaluate team subscriptions quickly and submit long-running actions
         for sub in team_subs_copy:
             try:
-                if not sub.get('triggered') and self._dependencies_complete(sub, data_copy):
+                if not sub.get('triggered') and self._should_trigger_team(sub, data_copy):
                     self._executor.submit(self._safe_team_action, sub, 'start', list(sub['agent_ids']), data_copy)
                     with self._lock:
                         for real_sub in self._team_subs:
@@ -122,6 +157,22 @@ class WorkflowOrchestrator:
         if not agent_ids:
             return True
         return all(data.get(a, TaskStatus.PENDING) == TaskStatus.COMPLETE for a in agent_ids)
+
+    def _should_trigger_team(self, sub: Dict[str, Any], data: TaskStatusDict) -> bool:
+        """Return True if team should be triggered: dependencies complete AND team is still PENDING."""
+        team = sub.get('team')
+        if not team:
+            return False
+        
+        # Only check team status for teams that have an id (real Team objects)
+        if hasattr(team, 'id'):
+            # Only trigger teams that are still in PENDING status
+            team_status = data.get(team.id, TaskStatus.PENDING)
+            if team_status != TaskStatus.PENDING:
+                return False
+        
+        # Check if dependencies are complete
+        return self._dependencies_complete(sub, data)
 
     def _safe_team_action(self, sub: Dict[str, Any], action: str, arg: Any, data: TaskStatusDict):
         """Execute a team action (start/stop) safely in the executor."""
