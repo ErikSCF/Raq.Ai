@@ -120,12 +120,11 @@ class TestWorkflowExecution(unittest.TestCase):
             # Test proper workflow execution through orchestration
             print("   🧪 Testing workflow orchestration...")
             
-            # Run the workflow - this should trigger the orchestration cascade
-            wm.run()
+            # Run the workflow - this should trigger the orchestration cascade and wait for completion
+            result = wm.run()
             
-            # Give time for async orchestration to complete
-            import time
-            time.sleep(0.5)  # Increased wait time for MockTeamRunner delays
+            # Verify workflow completed successfully
+            self.assertTrue(result, "Workflow should complete successfully")
             
             # Check final status
             for team in wm.teams:
@@ -145,11 +144,13 @@ class TestWorkflowExecution(unittest.TestCase):
             # Verify workflow execution
             team_queue_msgs = [msg for msg in messages if "queued for execution" in msg]
             team_start_msgs = [msg for msg in messages if "starting execution" in msg]
-            team_complete_msgs = [msg for msg in messages if "completed successfully" in msg]
+            team_complete_msgs = [msg for msg in messages if "completed successfully" in msg and "Team" in msg]
+            workflow_complete_msgs = [msg for msg in messages if "Workflow completed successfully" in msg]
             
             self.assertEqual(len(team_queue_msgs), 2, "Both teams should be queued")
             self.assertEqual(len(team_start_msgs), 2, "Both teams should start execution")
             self.assertEqual(len(team_complete_msgs), 2, "Both teams should complete")
+            self.assertEqual(len(workflow_complete_msgs), 1, "Workflow should complete once")
             
             print(f"✅ Successful workflow test completed with {len(entries)} log entries")
             

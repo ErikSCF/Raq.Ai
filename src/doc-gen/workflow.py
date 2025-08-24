@@ -8,7 +8,7 @@ Loads workflow configuration and creates teams with complete configuration
 
 import asyncio
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Dict, Any, Generator
 
 from team import Team
 from workflow_orchestrator import WorkflowOrchestrator, TaskStatus
@@ -33,19 +33,76 @@ class WorkflowManager:
         self.logger_factory = logger_factory or get_default_factory()
         self.logger = self.logger_factory.create_logger("workflow")
 
-    def run(self):
-        """Run the workflow manager"""
+    def run(self, timeout_seconds: Optional[int] = None):
+        """Run the workflow manager with monitoring for completion/failure conditions
+        
+        Args:
+            timeout_seconds: Maximum time to wait for workflow completion (None = no timeout)
+        """
+        import time
+        
         self.logger.log("Running workflow manager...")
         # Queue all teams first
         for team in self.teams:
             team.run()
 
         # Now enable orchestration and trigger the first orchestration cycle
-        if self.orchestrator:
-            self.orchestrator.run()
-            self.logger.log("Orchestration enabled - workflow execution started")
-        else:
+        if not self.orchestrator:
             self.logger.error("Orchestrator not initialized - call initialize() first")
+            return False
+            
+        self.orchestrator.run()
+        self.logger.log("Orchestration enabled - workflow execution started")
+        
+        # Governor/Message pump - monitor workflow progress
+        import time
+        for _ in self._monitor_workflow_execution(timeout_seconds):
+            time.sleep(0.1)  # Brief sleep to prevent busy waiting
+        
+        # Check final status after monitoring completes
+        if self.orchestrator.has_errors():
+            return False
+        elif self.orchestrator.is_complete():
+            return True
+        else:
+            return False  # Timeout case
+    
+    def _monitor_workflow_execution(self, timeout_seconds: Optional[int] = None) -> Generator[None, None, None]:
+        """Monitor workflow execution until completion, failure, or timeout
+        
+        Yields control back to caller on each iteration for cooperative multitasking.
+        """
+        import time
+        
+        start_time = time.time()
+        self.logger.log(f"Monitoring workflow execution for {len(self.teams)} teams...")
+        
+        while True:
+            current_time = time.time()
+            
+            # Check timeout
+            if timeout_seconds and (current_time - start_time) > timeout_seconds:
+                self.logger.error(f"Workflow timeout after {timeout_seconds} seconds")
+                return
+            
+            # Check for failure condition
+            if self.orchestrator.has_errors():
+                self.logger.error("Workflow failed - stopping all teams")
+                for team in self.teams:
+                    try:
+                        team.stop(force=True)
+                    except Exception as e:
+                        self.logger.error(f"Error stopping team {team.id}: {e}")
+                return
+            
+            # Check for completion condition
+            if self.orchestrator.is_complete():
+                elapsed = current_time - start_time
+                self.logger.log(f"Workflow completed successfully in {elapsed:.2f} seconds")
+                return
+            
+            # Yield control back to caller (cooperative multitasking)
+            yield
 
 
     def initialize(self, job_id: str,

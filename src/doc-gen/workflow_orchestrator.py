@@ -92,6 +92,16 @@ class WorkflowOrchestrator:
         with self._lock:
             return self._data.get(key, TaskStatus.PENDING)
     
+    def has_errors(self) -> bool:
+        """Check if any teams have errors."""
+        with self._lock:
+            return any(status == TaskStatus.ERROR for status in self._data.values())
+    
+    def is_complete(self) -> bool:
+        """Check if all teams are complete."""
+        with self._lock:
+            return len(self._data) > 0 and all(status == TaskStatus.COMPLETE for status in self._data.values())
+    
     def run(self):
         """Enable orchestration and trigger the first orchestration cycle.
         

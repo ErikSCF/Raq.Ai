@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Tests for ObservableStore team-driven subscriptions
+Tests for WorkflowOrchestrator team-driven subscriptions
 """
 
 import time
@@ -31,7 +31,7 @@ class FakeTeam:
         self.stop_event.set()
 
 
-class TestObservableTeamSubscriptions(unittest.TestCase):
+class TestWorkflowOrchestratorTeamSubscriptions(unittest.TestCase):
 
     def test_subscribe_team_ready_triggers_start_when_all_complete(self):
         store = WorkflowOrchestrator(max_workers=4)
