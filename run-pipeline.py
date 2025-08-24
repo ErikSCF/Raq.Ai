@@ -1,308 +1,206 @@
 #!/usr/bin/env python3
 """
-Full Pipeline Runner for RAQ.AI Document Generation Service
+RAQ Pipeline Runner
 
-This script runs the complete workflow: Content Planning Team → Content Production Team → Process Analysis.
-Uses sequential job IDs stored in jobid.txt for tracking.
-
-QUICK SETUP: Edit the GLOBAL CONFIGURATION VARIABLES section below to set rerun/start-from behavior.
-
-Usage:
-  python run-pipeline.py                                    # Run full workflow with new job ID
-  python run-pipeline.py --rerun 0060                       # Rerun full workflow using existing job 0060
-  python run-pipeline.py --rerun 0060 --start-from Content_Analysis_Team  # Rerun from specific team
+Main entry point for document generation pipeline that:
+- Auto-derives workflow paths from document types
+- Handles asset management automatically
+- Provides self-contained job execution
 """
 
-import argparse
-import asyncio
 import sys
+import argparse
 from pathlib import Path
 
-# Add src/doc-gen to Python path for imports
+# Configuration variables for easy VS Code execution
+# Change these values and run the script directly from VS Code
+DOCUMENT_TYPE = "simple"  # Options: "RAQ", "simple", "test"
+ASSETS_PATH = "assets"    # Path to assets folder or file
+OUTPUT_BASE = "./output"  # Output directory
+
+# Add the src/doc-gen directory to Python path
 sys.path.insert(0, str(Path(__file__).parent / "src" / "doc-gen"))
 
-# ========================================
-# GLOBAL CONFIGURATION VARIABLES
-# ========================================
-# Set these variables to control pipeline behavior without command-line args
-# These take priority over command-line arguments when set
+from workflow import WorkflowManager
+from workflow_orchestrator import WorkflowOrchestrator
+from team_runner import TeamRunnerFactory
+from logger import ConsoleLoggerFactory
 
-DOCUMENT_TYPE = "RAQ"
 
-# RERUN CONFIGURATION
-# Set to a job ID (e.g., "0060") to rerun from existing job, or None for new job
-RERUN_JOB_ID = None # Example: "0061"
-
-# START FROM TEAM CONFIGURATION  
-# Set to team name to start from specific team, or None to start from beginning
-# Quick Configuration Examples:
-
-LAST_TEAM_EXECUTED = None
-
-# ========================================
-
-from pipeline_runner import PipelineRunner
-from job_utils import (
-    get_next_job_id_for_document_type, 
-    peek_current_job_id_for_document_type, 
-    get_job_history_for_document_type,
-    get_next_job_id, 
-    peek_current_job_id, 
-    get_job_history  # Legacy functions for backward compatibility
-)
-
-# ==========================================
-# COMMAND LINE ARGUMENT PARSING
-# ==========================================
-
-def parse_arguments():
-    """Parse command line arguments for pipeline execution."""
-    parser = argparse.ArgumentParser(
-        description="RAQ.AI Pipeline Runner - Execute document generation workflow",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  python run-pipeline.py                                    # Run full workflow with new job ID
-  python run-pipeline.py --rerun 0060                       # Rerun full workflow using existing job 0060
-  python run-pipeline.py --last-team-executed Epic_Discovery_Team --source-job-id 0060  # Run dependent teams
-        """
-    )
+def get_next_job_id_for_document_type(document_type: str, output_base_path: Path = None) -> str:
+    """
+    Get the next sequential job ID for a specific document type.
+    Creates document-type-specific directory and jobid.txt file if they don't exist.
     
-    parser.add_argument(
-        '--rerun',
-        type=str,
-        help='Rerun using existing job ID (e.g., 0060)'
-    )
+    Args:
+        document_type: Document type (e.g., 'RAQ', 'test', etc.)
+        output_base_path: Base output directory. Defaults to 'output' in current directory.
+        
+    Returns:
+        str: Next job ID as a 4-digit string (e.g., "0003")
+    """
+    if output_base_path is None:
+        output_base_path = Path.cwd() / "output"
     
-    parser.add_argument(
-        '--last-team-executed',
-        type=str,
-        help='Run all teams that depend on this team (e.g., Epic_Discovery_Team)'
-    )
+    # Create document-type-specific directory
+    doc_type_dir = output_base_path / document_type
+    doc_type_dir.mkdir(parents=True, exist_ok=True)
     
-    parser.add_argument(
-        '--source-job-id',
-        type=str,
-        help='Source job ID to copy assets from (used with --last-team-executed)'
-    )
+    jobid_file = doc_type_dir / "jobid.txt"
     
-    return parser.parse_args()
-
-# ==========================================
-# CONFIGURATION CONSTANTS - EDIT AS NEEDED
-# ==========================================
-
-# Content description/requirements
-USER_INPUT = "Create a RAQ project planning document using the assets provided."
-
-# Template URL for structure analysis (optional)
-TEMPLATE_URL = None  # Set to None if not needed
-
-# Available document types: RAQ (others can be added later)
-
-
-# Output directory for job folders
-OUTPUT_BASE_PATH = Path(__file__).parent / "output"
-
-# Assets directory for document assets (PDFs, docs, etc.)
-ASSETS_BASE_PATH = Path(__file__).parent / "assets"
-
-# ==========================================
-# MAIN EXECUTION
-# ==========================================
-
-async def main():
-    """Main execution function for full pipeline workflow."""
-    # Parse command line arguments
-    args = parse_arguments()
+    if not jobid_file.exists():
+        # Create initial job ID file
+        current_id = 1
+        with open(jobid_file, 'w') as f:
+            f.write("0001")
+    else:
+        # Read current job ID and increment
+        with open(jobid_file, 'r') as f:
+            current_id_str = f.read().strip()
+            current_id = int(current_id_str) + 1
     
-    print("🚀 RAQ.AI Full Pipeline Runner")
+    # Format as 4-digit string and update file
+    new_job_id = f"{current_id:04d}"
+    with open(jobid_file, 'w') as f:
+        f.write(new_job_id)
+    
+    return new_job_id
+
+
+def run_pipeline(document_type: str, assets: list = None, output_base: str = "./output"):
+    """Run the pipeline with the new architecture."""
+    print(f"🚀 Starting {document_type} Pipeline")
     print("=" * 50)
     
-    # Use global variables if set, otherwise use command-line arguments
-    rerun_job = RERUN_JOB_ID if RERUN_JOB_ID is not None else args.rerun
-    last_team_executed = LAST_TEAM_EXECUTED if LAST_TEAM_EXECUTED is not None else args.last_team_executed
-    source_job_id = args.source_job_id
+    # Setup
+    logger_factory = ConsoleLoggerFactory()
+    job_id = get_next_job_id_for_document_type(document_type)
     
-    # Show configuration
-    if RERUN_JOB_ID or LAST_TEAM_EXECUTED:
-        print("🔧 Using Global Configuration:")
-        if RERUN_JOB_ID:
-            print(f"   RERUN_JOB_ID = {RERUN_JOB_ID}")
-        if LAST_TEAM_EXECUTED:
-            print(f"   LAST_TEAM_EXECUTED = {LAST_TEAM_EXECUTED}")
-        print()
+    print(f"📋 Document Type: {document_type}")
+    print(f"🆔 Job ID: {job_id}")
+    print(f"📂 Output Base: {output_base}")
+    if assets:
+        print(f"📄 Assets: {len(assets)} files")
+        for asset in assets:
+            print(f"   📄 {Path(asset).name}")
     
-    # Determine job ID based on configuration and document type
-    base_path = Path(__file__).parent
+    # Initialize WorkflowManager (no workflow path needed - derived from document type)
+    wm = WorkflowManager(logger_factory)
+    orchestrator = WorkflowOrchestrator(logger_factory=logger_factory)
+    team_runner_factory = TeamRunnerFactory(logger_factory)
     
-    # Handle source_job_id parameter (can be from --source-job-id or derived from --rerun)
-    if not source_job_id and rerun_job:
-        source_job_id = rerun_job
-    
-    if rerun_job:
-        # Get new job ID but use existing job as source
-        if not source_job_id:
-            source_job_id = rerun_job
-        job_id = get_next_job_id_for_document_type(DOCUMENT_TYPE, OUTPUT_BASE_PATH)
-        print(f"📋 New Job ID: {job_id} (based on job {source_job_id})")
-        
-        # Verify source job folder exists (check both new and legacy locations)
-        source_job_folder = OUTPUT_BASE_PATH / DOCUMENT_TYPE / source_job_id
-        if not source_job_folder.exists():
-            # Check legacy location for backward compatibility
-            legacy_source_folder = OUTPUT_BASE_PATH / source_job_id
-            if legacy_source_folder.exists():
-                source_job_folder = legacy_source_folder
-                print(f"📁 Using legacy job location: {source_job_folder}")
-            else:
-                print(f"❌ Error: Source job folder not found in {OUTPUT_BASE_PATH / DOCUMENT_TYPE / source_job_id} or {legacy_source_folder}")
-                return 1
-    elif source_job_id:
-        # Using source_job_id without rerun (for partial execution)
-        job_id = get_next_job_id_for_document_type(DOCUMENT_TYPE, OUTPUT_BASE_PATH)
-        print(f"📋 New Job ID: {job_id} (using source job {source_job_id})")
-        
-        # Verify source job folder exists
-        source_job_folder = OUTPUT_BASE_PATH / DOCUMENT_TYPE / source_job_id
-        if not source_job_folder.exists():
-            legacy_source_folder = OUTPUT_BASE_PATH / source_job_id
-            if legacy_source_folder.exists():
-                source_job_folder = legacy_source_folder
-                print(f"📁 Using legacy job location: {source_job_folder}")
-            else:
-                print(f"❌ Error: Source job folder not found in {OUTPUT_BASE_PATH / DOCUMENT_TYPE / source_job_id} or {legacy_source_folder}")
-                return 1
-    else:
-        job_id = get_next_job_id_for_document_type(DOCUMENT_TYPE, OUTPUT_BASE_PATH)
-        print(f"📋 New Job ID: {job_id}")
-    
-    # Create the document-type-specific job folder path
-    job_folder_path = OUTPUT_BASE_PATH / DOCUMENT_TYPE / job_id
-    
-    # Show execution mode configuration
-    if last_team_executed:
-        print(f"🔄 Running teams that depend on: {last_team_executed}")
-        if not source_job_id:
-            print("⚠️  Warning: last-team-executed requires source job data")
-    
-    # Display configuration
-    print(f"📝 User Input: {USER_INPUT}")
-    print(f"🔗 Template URL: {TEMPLATE_URL}")
-    print(f"📄 Document Type: {DOCUMENT_TYPE}")
-    print(f"📁 Output Path: {OUTPUT_BASE_PATH}")
-    print(f"📁 Assets Path: {ASSETS_BASE_PATH}")
-    
-    # Collect assets from assets directory
-    assets = []
-    if ASSETS_BASE_PATH.exists() and ASSETS_BASE_PATH.is_dir():
-        for asset_file in ASSETS_BASE_PATH.glob("*"):
-            if asset_file.is_file() and not asset_file.name.startswith('.'):
-                assets.append(str(asset_file))
-        print(f"📎 Found {len(assets)} asset(s): {[Path(a).name for a in assets]}")
-    else:
-        print("📎 No assets directory found or no assets available")
-    
-    print()
-    print("🔄 Pipeline Steps:")
-    print("   1. Content Planning Team")
-    print("   2. Content Production Team") 
-    print("   3. Process Analysis")
-    print()
-    
-    # Ensure output directory exists
-    OUTPUT_BASE_PATH.mkdir(parents=True, exist_ok=True)
-    
-    # Initialize pipeline runner
     try:
-        print("🔧 Initializing Pipeline Runner...")
-        runner = PipelineRunner()
-        print("✅ Pipeline Runner initialized successfully")
-    except Exception as e:
-        print(f"❌ Failed to initialize Pipeline Runner: {e}")
-        return 1
-    
-    # Run complete pipeline workflow
-    try:
-        print(f"🎯 Starting Full Pipeline workflow for job {job_id}...")
-        print()
-        
-        success = await runner.run_pipeline(
+        print(f"\n🔧 Initializing workflow...")
+        wm.initialize(
             job_id=job_id,
-            user_input=USER_INPUT,
-            template_url=TEMPLATE_URL,
-            document_type=DOCUMENT_TYPE,
-            output_base_path=OUTPUT_BASE_PATH / DOCUMENT_TYPE,  # Document-type-specific path
-            assets=assets if assets else None,
-            last_team_executed=last_team_executed,
-            source_job_id=source_job_id  # New parameter for rerun source
+            document_type=document_type,
+            output_base_path=output_base,
+            orchestrator=orchestrator,
+            team_runner_factory=team_runner_factory,
+            assets=assets or []
         )
         
-        if success:
-            print()
-            print(f"🎉 Full pipeline completed successfully!")
-            print(f"📁 Job folder: {job_folder_path}")
-            print(f"📄 Planning output: {job_folder_path / 'planning_output.md'}")
-            print(f"📄 Production output: {job_folder_path / 'production_output.md'}")
-            print(f"📄 Process analysis: {job_folder_path / 'process_analysis.md'}")
-            print(f"📊 Configuration: {job_folder_path / 'pipeline_config.json'}")
-            print()
-            print("🔍 Generated Files:")
-            if job_folder_path.exists():
-                for file in sorted(job_folder_path.glob("*.md")):
-                    print(f"   - {file.name}")
-            print()
-            print("🔍 Next steps:")
-            print("  - Review all generated outputs")
-            print("  - Check process analysis for insights")
-            print("  - Adjust configuration constants for next run")
-            return 0
-        else:
-            print("❌ Full pipeline workflow failed!")
-            return 1
+        print(f"✅ Workflow initialized successfully")
+        print(f"   📊 Teams: {len(wm.teams)}")
+        print(f"   📂 Job folder: {wm.job_folder}")
+        
+        # Show team structure
+        print(f"\n🔧 Team Structure:")
+        for i, team in enumerate(wm.teams, 1):
+            print(f"   {i}. {team.id}")
+            print(f"      📄 Output: {team.output_file}")
+            print(f"      📋 Template: {team.template}")
+            if team.depends_on:
+                print(f"      🔗 Depends on: {team.depends_on}")
+        
+        # Show asset summary
+        if wm.asset_manager:
+            summary = wm.asset_manager.get_asset_summary()
+            print(f"\n📦 Asset Summary:")
+            print(f"   Total files: {summary['total_files']}")
+            print(f"   File types: {summary['types']}")
             
-    except KeyboardInterrupt:
-        print("\n⚠️ Interrupted by user")
-        return 1
+            asset_info = wm.asset_manager.format_assets_for_agent()
+            if asset_info.strip():
+                print(f"   🧠 Vector memory: Created")
+            else:
+                print(f"   🧠 Vector memory: Not created")
+        
+        # Execute workflow
+        print(f"\n🎯 Executing workflow...")
+        print(f"   This may take several minutes...")
+        
+        result = wm.run()
+        
+        if result:
+            print(f"\n✅ Pipeline completed successfully!")
+            
+            # Show final statuses
+            print(f"\n📈 Final Results:")
+            for team in wm.teams:
+                status = orchestrator.get(team.id)
+                output_file = wm.job_folder / f"{team.output_file}.md"
+                
+                if output_file.exists():
+                    size = output_file.stat().st_size
+                    print(f"   ✅ {team.id}: {status} ({size} bytes)")
+                else:
+                    print(f"   ⚠️ {team.id}: {status} (no output file)")
+            
+            print(f"\n📂 Results saved to: {wm.job_folder}")
+            
+        else:
+            print(f"\n⚠️ Pipeline completed with errors")
+            print(f"📂 Check logs in: {wm.job_folder}")
+            
     except Exception as e:
-        print(f"❌ Error during pipeline workflow: {e}")
-        import traceback
-        traceback.print_exc()
-        return 1
+        print(f"\n❌ Pipeline failed: {e}")
+        raise
 
-def print_status():
-    """Print current status information for all document types."""
-    base_path = Path(__file__).parent
-    
-    print("📊 Current Status:")
-    
-    # Show document-type-specific status
-    current_job_id = peek_current_job_id_for_document_type(DOCUMENT_TYPE, OUTPUT_BASE_PATH)
-    next_job_id = f"{int(current_job_id) + 1:04d}" if current_job_id != "0000" else "0001"
-    job_history = get_job_history_for_document_type(DOCUMENT_TYPE, OUTPUT_BASE_PATH)
-    
-    print(f"   Document Type: {DOCUMENT_TYPE}")
-    print(f"   Current Job ID: {current_job_id}")
-    print(f"   Next Job ID: {next_job_id}")
-    print(f"   Output Directory: {OUTPUT_BASE_PATH / DOCUMENT_TYPE}")
-    print(f"   Total Jobs: {len(job_history)}")
-    
-    if job_history:
-        print(f"   Latest Job: {job_history[0]}")
-        print(f"   Job History: {', '.join(job_history)}")
-    else:
-        print(f"   No jobs yet for document type: {DOCUMENT_TYPE}")
-    
-    # Show legacy status for backward compatibility
-    legacy_job_history = get_job_history(OUTPUT_BASE_PATH, base_path)
-    if legacy_job_history['job_folders']:
-        print(f"   Legacy Jobs (flat structure): {', '.join(legacy_job_history['job_folders'])}")
 
-if __name__ == "__main__":
-    # Print status before running
-    print_status()
+def main():
+    """Main entry point."""
+    parser = argparse.ArgumentParser(description='Run document generation pipeline')
+    parser.add_argument('document_type', nargs='?', default=DOCUMENT_TYPE, 
+                       help=f'Type of document to generate (RAQ, simple, test) - Default: {DOCUMENT_TYPE}')
+    parser.add_argument('--assets', default=ASSETS_PATH, 
+                       help=f'Assets folder to include - Default: {ASSETS_PATH}')
+    
+    args = parser.parse_args()
+    
+    # Use configuration variables if running without arguments
+    document_type = args.document_type
+    assets_path = args.assets
+    
+    print(f"🔧 Configuration:")
+    print(f"   📋 Document Type: {document_type}")
+    print(f"   📁 Assets Path: {assets_path}")
+    print(f"   📂 Output Base: {OUTPUT_BASE}")
     print()
     
-    # Run the main workflow
-    exit_code = asyncio.run(main())
-    sys.exit(exit_code)
+    # Handle assets - can be a folder or individual files
+    validated_assets = []
+    assets_path_obj = Path(assets_path)
+    
+    if assets_path_obj.exists():
+        if assets_path_obj.is_dir():
+            # If it's a directory, add all files in it
+            for file_path in assets_path_obj.rglob('*'):
+                if file_path.is_file():
+                    validated_assets.append(str(file_path.resolve()))
+        else:
+            # If it's a file, add it directly
+            validated_assets.append(str(assets_path_obj.resolve()))
+    else:
+        print(f"❌ Assets path not found: {assets_path}")
+        sys.exit(1)
+    
+    run_pipeline(
+        document_type=document_type,
+        assets=validated_assets,
+        output_base=OUTPUT_BASE
+    )
+
+
+if __name__ == "__main__":
+    main()
