@@ -38,7 +38,7 @@ class TestObservableTeamSubscriptions(unittest.TestCase):
         team = FakeTeam()
 
         # subscribe which depends on two agent ids
-        store.subscribe_team(team, ['a1', 'a2'], trigger='ready', one_shot=True)
+        store.subscribe_team(team, ['a1', 'a2'])
 
         # set first agent to complete (not enough yet)
         store.set('a1', TaskStatus.COMPLETE)
@@ -53,18 +53,20 @@ class TestObservableTeamSubscriptions(unittest.TestCase):
         self.assertTrue(started)
         self.assertEqual(set(team.started_with), {'a1', 'a2'})
 
-    def test_subscribe_team_any_error_triggers_stop(self):
+    def test_subscribe_team_starts_immediately_with_no_dependencies(self):
         store = ObservableStore(max_workers=4)
         team = FakeTeam()
 
-        store.subscribe_team(team, ['a3'], trigger='any_error', one_shot=True)
+        # subscribe with no dependencies - should start on first set call
+        store.subscribe_team(team, [])
 
-        # set agent to error -> should trigger stop
-        store.set('a3', TaskStatus.ERROR)
+        # any set call should trigger start since no dependencies
+        store.set('any_key', TaskStatus.COMPLETE)
 
-        stopped = team.stop_event.wait(timeout=1.0)
-        self.assertTrue(stopped)
-        self.assertTrue(team.stopped_with)
+        # wait for executor to run start
+        started = team.start_event.wait(timeout=1.0)
+        self.assertTrue(started)
+        self.assertEqual(team.started_with, [])
 
 
 if __name__ == '__main__':

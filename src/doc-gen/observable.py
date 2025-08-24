@@ -6,9 +6,10 @@ A minimal key-value store with async callbacks for agent coordination.
 """
 
 import threading
-from typing import Dict, Callable, List, Any, Set
+from typing import Dict, Callable, List, Any, Set, Optional
 from concurrent.futures import ThreadPoolExecutor
 from enum import Enum
+from logger import LoggerFactory, get_default_factory, Logger
 
 
 class TaskStatus(Enum):
@@ -49,13 +50,15 @@ class ObservableStore:
     once when ready (or immediately if there are no dependencies).
     """
 
-    def __init__(self, max_workers: int = 10):
+    def __init__(self, max_workers: int = 10, logger_factory: Optional[LoggerFactory] = None):
         self._data: TaskStatusDict = TaskStatusDict()
-    # legacy callback list removed - use team subscriptions only
-    # Team subscriptions: list of dicts with keys: team, agent_ids (set), triggered
-    self._team_subs: List[Dict[str, Any]] = []
-    self._lock = threading.Lock()
-    self._executor = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="callback-")
+        # legacy callback list removed - use team subscriptions only
+        # Team subscriptions: list of dicts with keys: team, agent_ids (set), triggered
+        self._team_subs: List[Dict[str, Any]] = []
+        self._lock = threading.Lock()
+        self._executor = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="callback-")
+        self._logger_factory = logger_factory or get_default_factory()
+        self._logger = self._logger_factory.create_logger("observable")
 
     # Legacy callback-style subscription removed. Use `subscribe_team` for
     # team-driven orchestration. This keeps the store focused on declarative
@@ -111,7 +114,7 @@ class ObservableStore:
                                 real_sub['triggered'] = True
                                 break
             except Exception as e:
-                print(f"Warning: subscription evaluation error: {e}")
+                self._logger.error(f"subscription evaluation error: {e}")
 
     def _dependencies_complete(self, sub: Dict[str, Any], data: TaskStatusDict) -> bool:
         """Return True when all dependency agent ids are COMPLETE (or none given)."""
@@ -133,7 +136,7 @@ class ObservableStore:
                 # arg is force flag
                 team.stop(force=bool(arg))
         except Exception as e:
-            print(f"Warning: Team action error for team {getattr(team, 'id', str(team))}: {e}")
+            self._logger.error(f"Team action error for team {getattr(team, 'id', str(team))}: {e}")
             # If team action fails, remove subscription to avoid repeated failures
             with self._lock:
                 if sub in self._team_subs:

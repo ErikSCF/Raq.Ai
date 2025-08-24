@@ -10,6 +10,8 @@ from dataclasses import dataclass
 
 from observable import ObservableStore, TaskStatus
 from team_runner import TeamRunnerFactory
+from logger import LoggerFactory, get_default_factory, Logger
+from logger import LoggerFactory, get_default_factory, Logger
 
 
 @dataclass
@@ -35,11 +37,13 @@ class TeamConfig:
 class Team:
     """Represents a workflow team with its configuration"""
     
-    def __init__(self, config: TeamConfig):
+    def __init__(self, config: TeamConfig, logger_factory: Optional[LoggerFactory] = None):
         """Initialize team with complete configuration"""
         self.config = config
         self.observable = None
         self.team_runner = None
+        self.logger_factory = logger_factory or get_default_factory()
+        self.logger = self.logger_factory.create_logger("team")
     
     def initialize(self, observable: ObservableStore, team_runner_factory: TeamRunnerFactory):
         """Initialize team with observable store and subscribe to status changes"""
@@ -59,7 +63,7 @@ class Team:
         except Exception:
             # If observable doesn't support team subscriptions, ignore silently
             self._unsubscribe = None
-        print(f"Team '{self.id}' (template: {self.template}) registered with observable store")
+        self.logger.log(f"Team '{self.id}' (template: {self.template}) registered with observable store")
 
     def run(self): 
         self.observable.set(self.config.id, TaskStatus.PENDING)
@@ -72,12 +76,12 @@ class Team:
         the observable with agent status changes as agents run.
         """
         # Minimal idempotent scaffold - real implementation should create agents
-        print(f"Team '{self.id}': start called for agents {agent_ids}")
+        self.logger.log(f"Team '{self.id}': start called for agents {agent_ids}")
         self.team_runner.run()
 
     def stop(self, force: bool = False):
         """Stop all running agents for this team. If force is True, kill processes."""
-        print(f"Team '{self.id}': stop called (force={force})")
+        self.logger.log(f"Team '{self.id}': stop called (force={force})")
         self.team_runner.stop(force)
     
     def _on_status_change(self, data: Dict[str, Any]):
@@ -85,7 +89,7 @@ class Team:
         # Teams can react to status changes here
         if 'team_status' in data and self.id in data['team_status']:
             team_status = data['team_status'][self.id]
-            print(f"Team '{self.id}' status changed to: {team_status}")
+            self.logger.log(f"Team '{self.id}' status changed to: {team_status}")
     
     @property
     def id(self) -> str:
