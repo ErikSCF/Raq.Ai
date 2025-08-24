@@ -8,10 +8,18 @@ Loads workflow configuration and creates teams with complete configuration
 
 import yaml
 import os
+import asyncio
+from pathlib import Path
 from typing import Dict, List, Any, Optional
 
 from team import Team, TeamConfig
 from observable import ObservableStore
+
+# Optional asset manager used to populate vector DB for RAG-enabled teams.
+try:
+    from asset_manager import AssetManager
+except Exception:
+    AssetManager = None
 
 
 class WorkflowManager:
@@ -25,17 +33,59 @@ class WorkflowManager:
         self.observable = None
         self._load_workflow()
     
-    def initialize(self, observable: ObservableStore = None):
-        """Initialize workflow with observable store and initialize all teams"""
+    def initialize(self, observable: ObservableStore = None,
+                   job_id: Optional[str] = None,
+                   document_type: Optional[str] = None,
+                   output_base_path: Optional[str] = None,
+                   assets: Optional[List[str]] = None):
+        """Initialize workflow with observable store, create job output path and
+        optionally prepare assets/vector memory.
+
+        Backwards-compatible: if called with only `observable`, behaves like before.
+        """
         if observable is None:
             observable = ObservableStore()
-        
+
         self.observable = observable
-        
+
+        # If job/output parameters are provided, create the output folder and
+        # optionally build the asset vector memory.
+        if job_id and document_type and output_base_path:
+            try:
+                job_base = Path(output_base_path)
+                # Create document-type specific folder and job folder
+                job_folder = job_base / document_type / job_id
+                job_folder.mkdir(parents=True, exist_ok=True)
+                print(f"Created job output folder: {job_folder}")
+
+                # If AssetManager is available and assets were provided, create vector memory
+                if assets and AssetManager is not None:
+                    try:
+                        manager = AssetManager(job_id, str(job_folder), assets)
+                        # create_vector_memory is async in the old manager; run it
+                        memory = None
+                        try:
+                            memory = asyncio.run(manager.create_vector_memory())
+                        except RuntimeError:
+                            # If we're already in an event loop, schedule and wait
+                            loop = asyncio.get_event_loop()
+                            memory = loop.run_until_complete(manager.create_vector_memory())
+                        self.asset_manager = manager
+                        self.memory = memory
+                        if memory:
+                            print(f"Asset memory configured for job {job_id}")
+                        else:
+                            print(f"Asset memory not configured for job {job_id}")
+                    except Exception as e:
+                        print(f"Error preparing assets/vector memory: {e}")
+
+            except Exception as e:
+                print(f"Error creating job folder: {e}")
+
         # Initialize all teams with the observable store
         for team in self.teams:
             team.initialize(self.observable)
-        
+
         print(f"Workflow '{self.get_workflow_info()['name']}' initialized with {len(self.teams)} teams")
         return self.observable
     
