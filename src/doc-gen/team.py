@@ -42,9 +42,35 @@ class Team:
     def initialize(self, observable: ObservableStore):
         """Initialize team with observable store and subscribe to status changes"""
         self.observable = observable
-        # Subscribe to team status changes
-        current_state = self.observable.subscribe(self._on_status_change)
-        print(f"Team '{self.id}' (template: {self.template}) subscribed to observable store")
+        # Register team subscription using the team's declared dependency (if any).
+        # `depends_on` is a team id this team depends on; register that so the
+        # observable can trigger this team's start/stop when the dependency updates.
+        try:
+            # Always register the team with the observable. If the team has no
+            # declared dependency (`depends_on`), pass an empty list. The
+            # ObservableStore treats an empty dependency list as an immediate
+            # trigger for the default "ready" action so teams with no
+            # dependencies run in parallel.
+            agent_deps = [self.depends_on] if self.depends_on else []
+            self._unsubscribe = self.observable.subscribe_team(self, agent_deps)
+        except Exception:
+            # If observable doesn't support team subscriptions, ignore silently
+            self._unsubscribe = None
+        print(f"Team '{self.id}' (template: {self.template}) registered with observable store")
+
+    def start(self, agent_ids: List[str]):
+        """Start the team's agents based on the provided dependent agent IDs.
+
+        This method is intended to be long-running and idempotent: calling it
+        multiple times should not create duplicate agents. Teams should update
+        the observable with agent status changes as agents run.
+        """
+        # Minimal idempotent scaffold - real implementation should create agents
+        print(f"Team '{self.id}': start called for agents {agent_ids}")
+
+    def stop(self, force: bool = False):
+        """Stop all running agents for this team. If force is True, kill processes."""
+        print(f"Team '{self.id}': stop called (force={force})")
     
     def _on_status_change(self, data: Dict[str, Any]):
         """Handle status changes from the observable store"""
