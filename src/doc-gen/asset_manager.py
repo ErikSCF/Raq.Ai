@@ -88,8 +88,9 @@ class AssetManager:
         print(f"Copying document template files from {documents_dir} to {self.assets_dir}")
         
         # Copy all non-workflow files to assets (workflow.yaml should be handled by WorkflowManager)
+        # Also exclude brand_content_brief.md as it should be in the main job folder, not assets
         for item in documents_dir.iterdir():
-            if item.is_file() and item.suffix not in ['.yaml', '.yml']:
+            if item.is_file() and item.suffix not in ['.yaml', '.yml'] and item.name != 'brand_content_brief.md':
                 destination = self.assets_dir / item.name
                 shutil.copy2(item, destination)
                 self.moved_files.append(str(destination))

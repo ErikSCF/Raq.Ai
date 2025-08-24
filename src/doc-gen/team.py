@@ -54,9 +54,10 @@ class Team:
         self.logger_factory = logger_factory or get_default_factory()
         self.logger = self.logger_factory.create_logger("team")
     
-    def initialize(self, orchestrator: WorkflowOrchestrator, team_runner_factory: TeamRunnerFactory):
+    def initialize(self, orchestrator: WorkflowOrchestrator, team_runner_factory: TeamRunnerFactory, vector_memory=None):
         """Initialize team with orchestrator and subscribe to status changes"""
         self.orchestrator = orchestrator
+        self.vector_memory = vector_memory
         # Register team subscription using the team's declared dependency (if any).
         # `depends_on` is a team id this team depends on; register that so the
         # observable can trigger this team's start/stop when the dependency updates.

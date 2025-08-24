@@ -1,0 +1,19 @@
+workflow:
+  allow_repeated_speaker: false
+  max_messages: 10
+  max_selector_attempts: 3
+  model: gpt-4o-mini
+  teams:
+  - id: good_team
+    output_file: good_output.md
+    template: GoodTeam.yaml
+    test_delay_seconds: 0.05
+    test_progress_steps: 2
+  - depends_on: good_team
+    id: bad_team
+    output_file: bad_output.md
+    template: BadTeam.yaml
+    test_failure_message: Critical team failure
+    test_failure_mode: exception
+  temperature: 0.3
+  termination_keyword: TERMINATE

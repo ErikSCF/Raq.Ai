@@ -166,7 +166,7 @@ class WorkflowManager:
         # Create and initialize teams
         for team_config in team_configs:
             team = Team(team_config, self.logger_factory)
-            team.initialize(self.orchestrator, team_runner_factory)
+            team.initialize(self.orchestrator, team_runner_factory, memory)
             self.teams.append(team)
 
         self.logger.log(f"Workflow initialized with {len(self.teams)} teams")

@@ -26,9 +26,10 @@ class Logger(Protocol):
 class TeamRunner:
     """Executes a team's logic (placeholder implementation)."""
 
-    def __init__(self, team_config: Optional[TeamConfig] = None, logger: Optional[Logger] = None):
+    def __init__(self, team_config: Optional[TeamConfig] = None, logger: Optional[Logger] = None, vector_memory=None):
         self.team_config = team_config  # complete team configuration
         self.logger = logger
+        self.vector_memory = vector_memory  # vector database for retrieval
         self._initialized = False
         self._running = False
 
@@ -40,6 +41,10 @@ class TeamRunner:
         if self.logger and self.team_config:
             self.logger.log(f"Initializing team runner for team {self.team_config.id}", "team_runner")
             self.logger.log(f"Team config: model={self.team_config.model}, max_messages={self.team_config.max_messages}", "team_runner")
+            if self.vector_memory:
+                self.logger.log(f"Vector memory available for team {self.team_config.id}", "team_runner")
+            else:
+                self.logger.log(f"No vector memory available for team {self.team_config.id}", "team_runner")
         elif self.logger:
             self.logger.log("Initializing team runner (no config provided)", "team_runner")
         self._initialized = True
@@ -53,10 +58,13 @@ class TeamRunner:
         team_id = self.team_config.id if self.team_config else '<unknown>'
         if self.logger:
             self.logger.log(f"Running team {team_id}", "team_runner")
+            if self.vector_memory:
+                self.logger.log(f"Team {team_id} has access to vector memory for retrieval", "team_runner")
         
         self._running = True
         # Placeholder: real logic would stream messages, etc.
         # Here's where you'd use self.team_config.model, self.team_config.temperature, etc.
+        # And where you'd use self.vector_memory for document retrieval
 
     def stop(self, force: bool = False) -> None:
         """Stop execution and release resources."""
@@ -83,6 +91,7 @@ class TeamRunnerFactory:
         if self.logger_factory:
             logger = self.logger_factory.create_logger("team_runner")
         
-        # Extract team config from the team object
+        # Extract team config and vector memory from the team object
         team_config = getattr(team, 'config', None)
-        return TeamRunner(team_config, logger)
+        vector_memory = getattr(team, 'vector_memory', None)
+        return TeamRunner(team_config, logger, vector_memory)
